@@ -42,7 +42,7 @@ const DEFAULT_TURING = 'http://127.0.0.1:8088'
 
 export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: Props) {
   const { t } = useLocale()
-  const [datasets, setDatasets] = useState(initialDataset ?? 'vuln_scan')
+  const [datasets, setDatasets] = useState(initialDataset ?? 'vuln_jeecgboot')
   const [repoName, setRepoName] = useState('vulnbench-target')
   const [gtFile, setGtFile] = useState(DEFAULT_GT)
   const [platforms, setPlatforms] = useState('web')
@@ -217,7 +217,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
                 aria-controls={datasetListboxId}
                 aria-activedescendant={showSuggestions && activeSuggestion >= 0 ? `${datasetListboxId}-option-${activeSuggestion}` : undefined}
                 className={inputClass(errMsg(IDS.datasets))}
-                placeholder="vuln_scan"
+                placeholder="vuln_jeecgboot"
               />
               {showSuggestions && (
                 <div id={datasetListboxId} role="listbox" className="absolute z-50 left-0 right-0 mt-1 rounded-[var(--radius-sm)] border border-[var(--border-md)] bg-[var(--bg-card)] shadow-[var(--shadow)] overflow-hidden max-h-48 overflow-y-auto">

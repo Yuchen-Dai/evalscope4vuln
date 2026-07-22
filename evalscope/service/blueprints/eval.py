@@ -10,13 +10,8 @@ from evalscope.constants import EvalType
 from evalscope.report.combinator import get_data_frame, get_report_list
 from evalscope.utils.logger import get_logger
 from ..utils import (
-    DEFAULT_MULTIMODAL_BENCHMARKS,
-    DEFAULT_TEXT_BENCHMARKS,
     OUTPUT_DIR,
-    VULN_BENCHMARKS,
-    build_benchmark_entry,
     create_log_file,
-    discover_all_benchmarks,
     get_log_content,
     run_eval_wrapper,
     run_in_subprocess,
@@ -24,13 +19,33 @@ from ..utils import (
     stop_process,
     validate_task_id,
 )
+from evalscope.api.registry import BENCHMARK_REGISTRY
 
 logger = get_logger()
 
-# vuln_scan benchmark 的本地 dataset 目录（evalscope/data/vuln_scan）
-_VULN_DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'benchmarks', 'vuln_scan', 'data')
-
 bp_eval = Blueprint('eval', __name__, url_prefix='/api/v1/eval')
+
+
+def _vuln_entry(name: str) -> Dict[str, Any]:
+    """从 BENCHMARK_REGISTRY 的 BenchmarkMeta 构造一个 vuln benchmark entry（供前端展示）。"""
+    meta = BENCHMARK_REGISTRY[name]
+    return {
+        'name': name,
+        'pretty_name': meta.pretty_name or name,
+        'tags': list(meta.tags or []),
+        'category': 'llm',
+        'subset_list': list(meta.subset_list or []),
+        'total_samples': 0,
+        'few_shot_num': meta.few_shot_num,
+        'dataset_id': meta.dataset_id,
+        'paper_url': meta.paper_url,
+        'metrics': [],
+        'meta': meta.to_string_dict(),
+        'description': {
+            'zh': {'full': meta.description or '', 'sections': {}},
+            'en': None,
+        },
+    }
 
 _COLUMN_ZH = {
     'Model': '模型',
@@ -123,21 +138,21 @@ def _build_task_config(data: dict) -> TaskConfig:
     """Build a TaskConfig from request data with common defaults applied.
 
     漏洞测评专用：eval_type 固定 mock_llm（不加载真模型，run_inference 自行调图灵平台）；
-    表单 scan_config（图灵扫描参数）透传到 dataset_args['vuln_scan']，供 adapter 读取。
+    表单 scan_config（图灵扫描参数）透传到所选 benchmark 的 dataset_args[name]。
+    每个 vuln_<name> benchmark 的 dataset_id 已在注册时指向 datasets/<name>/，无需补 local_path。
     """
     if not data.get('eval_type'):
         data['eval_type'] = EvalType.MOCK_LLM
     if not data.get('model'):
         data['model'] = 'turing_scanner'
-    # 把表单 scan_config 透传到 vuln_scan benchmark 的 dataset_args
-    # （adapter 在 record_to_sample 通过 self._task_config.dataset_args 读取）
+    # scan_config 透传到所选的每个 vuln_* benchmark（adapter 在 record_to_sample
+    # 通过 self._task_config.dataset_args[self._benchmark_meta.name] 读取）
     scan_config = data.get('scan_config') or {}
-    vuln_args = data.setdefault('dataset_args', {}).setdefault('vuln_scan', {})
     if scan_config:
-        vuln_args['scan_config'] = scan_config
-    # vuln_scan 用本地 dataset（固定路径），自动补 local_path，前端无需填写
-    if 'vuln_scan' in (data.get('datasets') or []):
-        vuln_args.setdefault('local_path', _VULN_DATASET_DIR)
+        dataset_args = data.setdefault('dataset_args', {})
+        for name in (data.get('datasets') or []):
+            if name.startswith('vuln_'):
+                dataset_args.setdefault(name, {})['scan_config'] = scan_config
 
     task_config = TaskConfig.from_dict(data)
     task_config.no_timestamp = True
@@ -337,11 +352,12 @@ def list_benchmarks():
             from the ``_meta`` directory instead of the curated default lists.
     """
     try:
-        # 漏洞测评专用：只返回 VULN_BENCHMARKS 白名单（按 category 分桶兼容前端 tab）
-        entries = [build_benchmark_entry(name) for name in VULN_BENCHMARKS]
+        # 动态：返回所有 vuln_* benchmark（从注册表，category=llm → text 桶）
+        names = sorted(n for n in BENCHMARK_REGISTRY.list_keys() if n.startswith('vuln_'))
+        entries = [_vuln_entry(n) for n in names]
         result = {
-            'text': [e for e in entries if e.get('category') != 'vlm'],
-            'multimodal': [e for e in entries if e.get('category') == 'vlm'],
+            'text': entries,
+            'multimodal': [],
         }
         return jsonify(result), 200
     except Exception as e:

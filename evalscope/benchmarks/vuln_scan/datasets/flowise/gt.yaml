@@ -1,0 +1,4 @@
+# Flowise 漏洞测评 Ground Truth（占位）
+# 后续接真实图灵平台时，从 vuln_dataset/flowise_vuln_44_cases.md 解析 44 个 GHSA 漏洞填充此处。
+target: flowise
+vulnerabilities: []

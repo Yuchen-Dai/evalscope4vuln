@@ -1,19 +1,17 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
-# Vuln-Scan benchmark：对接图灵平台做漏洞挖掘测评。
-# 评测内核（turing client + GT matcher + metrics）已集成为本 benchmark 的内部模块。
+# Vuln-Scan 通用 adapter：对接图灵平台做漏洞挖掘测评。
+# 本文件只定义通用类；每个数据集由 registry_adapter.py 扫描 datasets/ 动态注册成 benchmark。
 import asyncio
 import json
 import time
 from typing import Any, Dict, List
 
-from evalscope.api.benchmark import BenchmarkMeta, DefaultDataAdapter
+from evalscope.api.benchmark import DefaultDataAdapter
 from evalscope.api.dataset import Sample
 from evalscope.api.evaluator import TaskState
 from evalscope.api.messages import ChatMessageUser
 from evalscope.api.metric import Score
 from evalscope.api.model import Model, ModelOutput
-from evalscope.api.registry import register_benchmark
-from evalscope.constants import OutputType, Tags
 from evalscope.utils.logger import get_logger
 
 from evalscope.benchmarks.vuln_scan import config as vb_config
@@ -88,27 +86,8 @@ async def _scan_async(scan_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
         await client.aclose()
 
 
-@register_benchmark(
-    BenchmarkMeta(
-        name='vuln_scan',
-        pretty_name='Vuln-Scan',
-        dataset_id='vuln_scan',                 # 被 dataset_args.local_path 覆盖
-        tags=[Tags.CUSTOM],
-        metric_list=[],                         # match_score 自己算，不走 registry metric
-        few_shot_num=0,
-        train_split=None,
-        eval_split='test',                      # → LocalDataLoader 找 default_test.jsonl
-        subset_list=['default'],
-        default_subset='default',
-        prompt_template='{question}',           # 占位（父类 process_sample_input 要求非 None），不调 LLM
-        system_prompt=None,
-        aggregation='mean',
-        output_types=[OutputType.GENERATION],
-        description='漏洞挖掘测评：对接图灵平台扫描，与 Ground Truth 比对算 TP/FP/FN、'
-                    'Precision/Recall/Coverage，按 vuln_type 分桶。',
-    )
-)
 class VulnBenchmarkAdapter(DefaultDataAdapter):
+    """通用漏洞挖掘测评 adapter。每个数据集由 registry_adapter.py 注册成一个 benchmark。"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -121,11 +100,11 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
     # record → Sample：扫描配置与 GT 路径都放 metadata
     def record_to_sample(self, record: Dict[str, Any]) -> Sample:
         meta = dict(record.get('metadata', {}) or {})
-        # 表单 scan_config（运行时经 dataset_args 透传到 task_config）覆盖 jsonl 默认值；
-        # repo_name/gt_file 提到 metadata 顶层（run_inference/match_score 从那里读）
         tc = self._task_config
         if tc is not None:
-            tc_scan = ((tc.dataset_args or {}).get('vuln_scan', {}) or {}).get('scan_config', {}) or {}
+            # scan_config 透传 key 用本 benchmark 的 name（如 vuln_jeecgboot）
+            name = self._benchmark_meta.name
+            tc_scan = ((tc.dataset_args or {}).get(name, {}) or {}).get('scan_config', {}) or {}
             record_scan = meta.get('scan_config') or {}
             meta['scan_config'] = {
                 **record_scan,
@@ -164,7 +143,7 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             completed=True,
         )
 
-    # 复用 vulnbench matcher + metrics 算 TP/FP/FN/P/R/Coverage，按 vuln_type 分桶
+    # 复用 matcher + metrics 算 TP/FP/FN/P/R/Coverage，按 vuln_type 分桶
     def match_score(self, original_prediction: str, filtered_prediction: str,
                     reference: str, task_state: TaskState) -> Score:
         raw = []
