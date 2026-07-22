@@ -1,0 +1,1 @@
+{"input":"Scan target: JeecgBoot-main","target":"","metadata":{"repo_name":"JeecgBoot-main","gt_file":"data/gt/jeecgboot.yaml","scan_config":{"platforms":"web","detect_types":"","priority":"100","turing_base_url":"http://127.0.0.1:8088","timeout":120}}}

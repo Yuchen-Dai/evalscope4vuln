@@ -28,7 +28,7 @@ from ..utils import (
 logger = get_logger()
 
 # vuln_scan benchmark 的本地 dataset 目录（evalscope/data/vuln_scan）
-_VULN_DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'data', 'vuln_scan')
+_VULN_DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'benchmarks', 'vuln_scan', 'data')
 
 bp_eval = Blueprint('eval', __name__, url_prefix='/api/v1/eval')
 

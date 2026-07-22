@@ -1,0 +1,70 @@
+# 示例 Ground Truth —— JeecgBoot-main
+# 位置取自 fake_turing/data/data.db 的真实 finding（联调时可看到非零 TP）。
+# GT-001~005 能匹配上图灵产出的 finding（TP）；GT-006/007 故意标注图灵未发现的漏洞（演示 FN/漏报）。
+# 真实评测时请用你自己的标注替换本文件。
+target: JeecgBoot-main
+project_id: e7fc30a7-b63c-439f-8816-7ef22e3ef217
+
+vulnerabilities:
+  - gt_id: GT-001
+    vuln_type: path-traversal
+    cwe: CWE-22
+    severity: MEDIUM
+    location:
+      file: VulnDemoController.java
+      line: 55
+    description: 任意文件读取（download 接口路径穿越）
+
+  - gt_id: GT-002
+    vuln_type: command-injection
+    cwe: CWE-78
+    severity: HIGH
+    location:
+      file: VulnDemoController.java
+      line: 82
+    description: executeCommand 接口命令注入（图灵多条 finding 命中此处，验证一对多去重）
+
+  - gt_id: GT-003
+    vuln_type: command-injection
+    cwe: CWE-78
+    severity: HIGH
+    location:
+      file: VulnIndirectController.java
+      line: 34
+    description: 间接命令注入（script 参数）
+
+  - gt_id: GT-004
+    vuln_type: deserialization
+    cwe: CWE-502
+    severity: HIGH
+    location:
+      file: VulnDemoController.java
+      line: 34
+    description: Java 原生反序列化
+
+  - gt_id: GT-005
+    vuln_type: sql-injection
+    cwe: CWE-89
+    severity: HIGH
+    location:
+      file: SysDictController.java   # 仅按文件+类型匹配（行号不确定时不约束）
+    description: 字典接口 SQL 注入
+
+  # —— 以下两条故意标注图灵未发现的漏洞，用于演示 FN（漏报）——
+  - gt_id: GT-006
+    vuln_type: xss
+    cwe: CWE-79
+    severity: MEDIUM
+    location:
+      file: NonExistentController.java
+      line: 1
+    description: （演示漏报）图灵应发现但未发现的存储型 XSS
+
+  - gt_id: GT-007
+    vuln_type: ssrf
+    cwe: CWE-918
+    severity: HIGH
+    location:
+      file: NonExistentController.java
+      line: 1
+    description: （演示漏报）图灵应发现但未发现的 SSRF

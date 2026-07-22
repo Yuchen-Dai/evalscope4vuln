@@ -1,18 +1,10 @@
 # Copyright (c) Alibaba, Inc. and its affiliates.
 # Vuln-Scan benchmark：对接图灵平台做漏洞挖掘测评。
-# 复用同仓 vulnbench 项目的内核（turing client + GT matcher + metrics），经 sys.path 注入。
+# 评测内核（turing client + GT matcher + metrics）已集成为本 benchmark 的内部模块。
 import asyncio
 import json
-import os
-import sys
 import time
 from typing import Any, Dict, List
-
-# ---- 注入 vulnbench 内核路径（evalscope 与 vulnbench 同在 vulnBenchmark/ 下）----
-_VULNBENCH = os.environ.get('VULNBENCH_PATH') or os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'vulnbench'))
-if os.path.isdir(_VULNBENCH) and _VULNBENCH not in sys.path:
-    sys.path.insert(0, _VULNBENCH)
 
 from evalscope.api.benchmark import BenchmarkMeta, DefaultDataAdapter
 from evalscope.api.dataset import Sample
@@ -24,12 +16,12 @@ from evalscope.api.registry import register_benchmark
 from evalscope.constants import OutputType, Tags
 from evalscope.utils.logger import get_logger
 
-import config as vb_config                      # vulnbench/config.py
-from turing.client import TuringClient, parse_findings   # noqa: E402
-from scoring.matcher import match as do_match            # noqa: E402
-from scoring.metrics import compute_metrics             # noqa: E402
-from dataset.adapter import load_gt                     # noqa: E402
-from schemas import ScanConfig                          # noqa: E402
+from evalscope.benchmarks.vuln_scan import config as vb_config
+from evalscope.benchmarks.vuln_scan.turing.client import TuringClient, parse_findings
+from evalscope.benchmarks.vuln_scan.scoring.matcher import match as do_match
+from evalscope.benchmarks.vuln_scan.scoring.metrics import compute_metrics
+from evalscope.benchmarks.vuln_scan.dataset.adapter import load_gt
+from evalscope.benchmarks.vuln_scan.schemas import ScanConfig
 
 logger = get_logger()
 

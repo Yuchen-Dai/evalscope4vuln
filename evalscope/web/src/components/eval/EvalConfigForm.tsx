@@ -37,7 +37,7 @@ const DOM_ORDER: string[] = [
   IDS.turingBaseUrl, IDS.pollTimeout,
 ]
 
-const DEFAULT_GT = '/home/yuchen/vulnBenchmark/vulnbench/gt/jeecgboot.yaml'
+const DEFAULT_GT = 'data/gt/jeecgboot.yaml'
 const DEFAULT_TURING = 'http://127.0.0.1:8088'
 
 export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: Props) {
