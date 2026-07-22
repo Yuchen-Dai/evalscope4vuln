@@ -4,7 +4,6 @@ import * as nav from './nav'
 import * as single from './single'
 import * as multi from './multi'
 import * as evaluation from './eval'
-import * as perf from './perf'
 import * as benchmarks from './benchmarks'
 import * as prediction from './prediction'
 import * as common from './common'
@@ -16,7 +15,6 @@ import * as reportDetail from './reportDetail'
 import * as metrics from './metrics'
 import * as compare from './compare'
 import * as dashboard from './dashboard'
-import * as performance from './performance'
 import * as tasks from './tasks'
 import * as tabs from './tabs'
 import * as form from './form'
@@ -29,7 +27,6 @@ const en: Dict = {
   single: single.en,
   multi: multi.en,
   eval: evaluation.en,
-  perf: perf.en,
   benchmarks: benchmarks.en,
   prediction: prediction.en,
   common: common.en,
@@ -41,7 +38,6 @@ const en: Dict = {
   metrics: metrics.en,
   compare: compare.en,
   dashboard: dashboard.en,
-  performance: performance.en,
   tasks: tasks.en,
   tabs: tabs.en,
   form: form.en,
@@ -53,7 +49,6 @@ const zh: Dict = {
   single: single.zh,
   multi: multi.zh,
   eval: evaluation.zh,
-  perf: perf.zh,
   benchmarks: benchmarks.zh,
   prediction: prediction.zh,
   common: common.zh,
@@ -65,7 +60,6 @@ const zh: Dict = {
   metrics: metrics.zh,
   compare: compare.zh,
   dashboard: dashboard.zh,
-  performance: performance.zh,
   tasks: tasks.zh,
   tabs: tabs.zh,
   form: form.zh,

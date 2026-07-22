@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { useLocale } from '@/contexts/LocaleContext'
 import LocaleToggle from './LocaleToggle'
 import ThemeToggle from './ThemeToggle'
-import { BarChart3, Gauge, FlaskConical, BookOpen, FileText, Menu, X } from 'lucide-react'
+import { BarChart3, FlaskConical, BookOpen, FileText, Menu, X } from 'lucide-react'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `coarse-target flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -33,7 +33,6 @@ export default function TopNav() {
   const navItems = [
     { to: '/dashboard', icon: <BarChart3 size={15} />, label: t('nav.dashboard') },
     { to: '/reports', icon: <FileText size={15} />, label: t('nav.evaluations') },
-    { to: '/performance', icon: <Gauge size={15} />, label: t('nav.performance') },
     { to: '/tasks', icon: <FlaskConical size={15} />, label: t('nav.tasks') },
     { to: '/benchmarks', icon: <BookOpen size={15} />, label: t('nav.benchmarks') },
   ]

@@ -6,6 +6,5 @@
  * schemas are split by domain across `reports`, `perf`, and `eval` files.
  */
 export * from './reports.schema'
-export * from './perf.schema'
 export * from './eval.schema'
 export * from './common.schema'

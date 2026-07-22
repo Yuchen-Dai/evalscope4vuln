@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "pretty_name": "Vuln-Scan",
+    "dataset_id": "vuln_scan",
+    "tags": ["Custom"],
+    "category": "llm",
+    "metrics": ["Precision", "Recall", "F1", "Coverage"],
+    "few_shot_num": 0,
+    "subset_list": ["default"],
+    "description": "\n## Overview\n\n漏洞挖掘测评：对接图灵平台对目标工程做静态漏洞扫描，将扫描产出的漏洞与独立 Ground Truth 比对，计算 TP/FP/FN、Precision/Recall/Coverage，并按漏洞类型分桶。\n\n## Task Description\n\n- **输入**：目标仓库 + Ground Truth 文件 + 图灵扫描配置（平台/探测类型/模型/并发/超时）\n- **流程**：提交图灵扫描 → 轮询拿回漏洞 finding → 与 GT 比对打分\n- **输出**：TP/FP/FN、Precision/Recall/Coverage/F1、按 vuln_type 分桶\n"
+  }
+}

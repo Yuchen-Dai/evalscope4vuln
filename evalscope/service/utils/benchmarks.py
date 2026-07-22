@@ -49,6 +49,11 @@ DEFAULT_MULTIMODAL_BENCHMARKS: List[str] = [
     'seed_bench_2_plus',
 ]
 
+#: 漏洞挖掘测评 benchmark（Benchmarks 页只显示这些白名单）。
+VULN_BENCHMARKS: List[str] = [
+    'vuln_scan',
+]
+
 # ---------------------------------------------------------------------------
 # Description parsing
 # ---------------------------------------------------------------------------

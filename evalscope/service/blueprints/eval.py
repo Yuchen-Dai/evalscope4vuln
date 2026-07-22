@@ -13,6 +13,7 @@ from ..utils import (
     DEFAULT_MULTIMODAL_BENCHMARKS,
     DEFAULT_TEXT_BENCHMARKS,
     OUTPUT_DIR,
+    VULN_BENCHMARKS,
     build_benchmark_entry,
     create_log_file,
     discover_all_benchmarks,
@@ -25,6 +26,9 @@ from ..utils import (
 )
 
 logger = get_logger()
+
+# vuln_scan benchmark 的本地 dataset 目录（evalscope/data/vuln_scan）
+_VULN_DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'data', 'vuln_scan')
 
 bp_eval = Blueprint('eval', __name__, url_prefix='/api/v1/eval')
 
@@ -71,7 +75,7 @@ def _build_result_table(work_dir: str) -> str:
         return ''
 
 
-_REQUIRED_FIELDS = ['model', 'datasets', 'api_url']
+_REQUIRED_FIELDS = ['datasets', 'scan_config']
 
 
 class RequestValidationError(Exception):
@@ -116,14 +120,29 @@ def _parse_request() -> tuple[dict, str]:
 
 
 def _build_task_config(data: dict) -> TaskConfig:
-    """Build a TaskConfig from request data with common defaults applied."""
+    """Build a TaskConfig from request data with common defaults applied.
+
+    漏洞测评专用：eval_type 固定 mock_llm（不加载真模型，run_inference 自行调图灵平台）；
+    表单 scan_config（图灵扫描参数）透传到 dataset_args['vuln_scan']，供 adapter 读取。
+    """
     if not data.get('eval_type'):
-        data['eval_type'] = EvalType.OPENAI_API
+        data['eval_type'] = EvalType.MOCK_LLM
+    if not data.get('model'):
+        data['model'] = 'turing_scanner'
+    # 把表单 scan_config 透传到 vuln_scan benchmark 的 dataset_args
+    # （adapter 在 record_to_sample 通过 self._task_config.dataset_args 读取）
+    scan_config = data.get('scan_config') or {}
+    vuln_args = data.setdefault('dataset_args', {}).setdefault('vuln_scan', {})
+    if scan_config:
+        vuln_args['scan_config'] = scan_config
+    # vuln_scan 用本地 dataset（固定路径），自动补 local_path，前端无需填写
+    if 'vuln_scan' in (data.get('datasets') or []):
+        vuln_args.setdefault('local_path', _VULN_DATASET_DIR)
 
     task_config = TaskConfig.from_dict(data)
     task_config.no_timestamp = True
     task_config.enable_progress_tracker = True
-    task_config.analysis_report = True
+    task_config.analysis_report = False  # 不生成 LLM 分析报告（无 judge model）
     return task_config
 
 
@@ -318,43 +337,12 @@ def list_benchmarks():
             from the ``_meta`` directory instead of the curated default lists.
     """
     try:
-        filter_type = request.args.get('type', '').lower()
-        return_all = request.args.get('all', '').lower() == 'true'
-
-        if return_all:
-            # Discover every benchmark from _meta directory
-            all_names = discover_all_benchmarks()
-            all_entries = [build_benchmark_entry(name) for name in all_names]
-
-            if filter_type == 'text':
-                result = {'text': [e for e in all_entries if e.get('category') == 'llm']}
-            elif filter_type == 'multimodal':
-                result = {'multimodal': [e for e in all_entries if e.get('category') == 'vlm']}
-            else:
-                # Bucket by category. Besides text (llm) and multimodal (vlm),
-                # the registry also has agent and aigc benchmarks which must not
-                # be dropped from the catalogue.
-                result = {
-                    'text': [e for e in all_entries if e.get('category') == 'llm'],
-                    'multimodal': [e for e in all_entries if e.get('category') == 'vlm'],
-                    'agent': [e for e in all_entries if e.get('category') == 'agent'],
-                    'aigc': [e for e in all_entries if e.get('category') == 'aigc'],
-                }
-        else:
-            # Use the curated default lists (backward-compatible)
-            cfg = current_app.config.get('SUPPORTED_BENCHMARKS', {})
-            text_names: List[str] = cfg.get('text', DEFAULT_TEXT_BENCHMARKS)
-            multimodal_names: List[str] = cfg.get('multimodal', DEFAULT_MULTIMODAL_BENCHMARKS)
-
-            result: Dict[str, Any] = {}
-            if filter_type in ('', 'text'):
-                result['text'] = [build_benchmark_entry(name) for name in text_names]
-            if filter_type in ('', 'multimodal'):
-                result['multimodal'] = [build_benchmark_entry(name) for name in multimodal_names]
-
-        if filter_type and filter_type not in ('text', 'multimodal'):
-            return jsonify({'error': f"Unknown type '{filter_type}'. Use 'text' or 'multimodal'."}), 400
-
+        # 漏洞测评专用：只返回 VULN_BENCHMARKS 白名单（按 category 分桶兼容前端 tab）
+        entries = [build_benchmark_entry(name) for name in VULN_BENCHMARKS]
+        result = {
+            'text': [e for e in entries if e.get('category') != 'vlm'],
+            'multimodal': [e for e in entries if e.get('category') == 'vlm'],
+        }
         return jsonify(result), 200
     except Exception as e:
         logger.error(f'Failed to list benchmarks: {e}')

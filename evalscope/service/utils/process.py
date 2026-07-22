@@ -7,8 +7,6 @@ import threading
 import traceback
 
 from evalscope.config import TaskConfig
-from evalscope.perf.arguments import Arguments as PerfArguments
-from evalscope.perf.main import run_perf_benchmark
 from evalscope.run import run_task
 from evalscope.utils.logger import get_logger
 
@@ -173,11 +171,6 @@ def run_in_subprocess(func, *args, task_id=None, **kwargs):
 def run_eval_wrapper(task_config: TaskConfig):
     """Run an evaluation task and return the result."""
     return run_task(task_config)
-
-
-def run_perf_wrapper(perf_args: PerfArguments):
-    """Run a performance benchmark and return the result."""
-    return run_perf_benchmark(perf_args)
 
 
 def serialize_result(result):

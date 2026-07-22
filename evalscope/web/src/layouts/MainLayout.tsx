@@ -6,7 +6,7 @@ import { useReports } from '@/contexts/ReportsContext'
 import { useLocale } from '@/contexts/LocaleContext'
 
 // Result routes share a single global "scan this directory" control.
-const SCAN_ROUTES = new Set(['/dashboard', '/reports', '/performance'])
+const SCAN_ROUTES = new Set(['/dashboard', '/reports'])
 
 export default function MainLayout() {
   const location = useLocation()

@@ -11,5 +11,4 @@
 
 export type * from './common'
 export type * from './reports'
-export type * from './perf'
 export type * from './eval'
