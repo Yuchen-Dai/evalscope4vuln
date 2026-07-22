@@ -192,7 +192,7 @@ def _execute_task(task_id: str, task_config: TaskConfig, label: str = 'Task'):
             return jsonify({'status': 'error', 'task_id': task_id, 'error': error_msg}), 500
         logger.info(f'[{task_id}] {label} completed successfully')
         return jsonify({
-            'status': 'completed',
+            'status': 'ok',
             'task_id': task_id,
             'result': serialize_result(result),
             'table': table_str
