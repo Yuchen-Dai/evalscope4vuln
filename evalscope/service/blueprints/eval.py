@@ -43,7 +43,7 @@ def _vuln_entry(name: str) -> Dict[str, Any]:
         'meta': meta.to_string_dict(),
         'description': {
             'zh': {'full': meta.description or '', 'sections': {}},
-            'en': None,
+            'en': {'full': meta.description or '', 'sections': {}},
         },
     }
 
