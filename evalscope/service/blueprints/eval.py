@@ -26,6 +26,11 @@ logger = get_logger()
 bp_eval = Blueprint('eval', __name__, url_prefix='/api/v1/eval')
 
 
+def _outputs_root() -> str:
+    """invoke 产出目录：用前端 outputs_root（--outputs），保证 Dashboard/Reports/progress 都能读到结果。"""
+    return current_app.config.get('OUTPUTS_ROOT') or OUTPUT_DIR
+
+
 def _vuln_entry(name: str) -> Dict[str, Any]:
     """从 BENCHMARK_REGISTRY 的 BenchmarkMeta 构造一个 vuln benchmark entry（供前端展示）。"""
     meta = BENCHMARK_REGISTRY[name]
@@ -211,7 +216,7 @@ def run_evaluation():
     data, task_id = _parse_request()
 
     task_config = _build_task_config(data)
-    task_config.work_dir = os.path.join(OUTPUT_DIR, task_id)
+    task_config.work_dir = os.path.join(_outputs_root(), task_id)
 
     logger.info(f'[{task_id}] Running evaluation task for model: {task_config.model}')
     logger.info(f'[{task_id}] Datasets: {task_config.datasets}')
@@ -245,7 +250,7 @@ def resume_evaluation():
     """
     data, task_id = _parse_request()
 
-    work_dir = os.path.join(OUTPUT_DIR, task_id)
+    work_dir = os.path.join(_outputs_root(), task_id)
     if not os.path.isdir(work_dir):
         return jsonify({'error': f'Output directory not found for task_id: {task_id}'}), 404
 
@@ -271,7 +276,7 @@ def get_evaluation_progress():
     if not task_id:
         return jsonify({'error': 'task_id is required'}), 400
 
-    progress_file = os.path.join(OUTPUT_DIR, task_id, 'progress.json')
+    progress_file = os.path.join(_outputs_root(), task_id, 'progress.json')
     try:
         with open(progress_file, 'r') as f:
             progress = json.load(f)
@@ -299,7 +304,7 @@ def get_evaluation_report():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
-    report_file = os.path.join(OUTPUT_DIR, task_id, 'reports', 'report.html')
+    report_file = os.path.join(_outputs_root(), task_id, 'reports', 'report.html')
     if not os.path.exists(report_file):
         return jsonify({'error': f'Report not found for task_id: {task_id}'}), 404
 
