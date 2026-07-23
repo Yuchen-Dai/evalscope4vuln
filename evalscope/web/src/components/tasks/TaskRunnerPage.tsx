@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { EvalInvokeResponse, LogResponse, ProgressResponse } from '@/api/types'
 import { usePolling } from '@/hooks/usePolling'
 import Card from '@/components/ui/Card'
@@ -27,6 +27,28 @@ function createTaskId(prefix: string): string {
   return `${prefix}_${Date.now()}`
 }
 
+// 持久化正在运行的 task_id，使刷新页面后能恢复进度/日志观察（任务在后端 spawn 子进程继续跑）
+function storageKey(prefix: string) {
+  return `vulnbench:running-task:${prefix}`
+}
+function loadRunningTaskId(prefix: string): string | null {
+  try {
+    return localStorage.getItem(storageKey(prefix))
+  } catch {
+    return null
+  }
+}
+function saveRunningTaskId(prefix: string, taskId: string) {
+  try {
+    localStorage.setItem(storageKey(prefix), taskId)
+  } catch { /* ignore quota */ }
+}
+function clearRunningTaskId(prefix: string) {
+  try {
+    localStorage.removeItem(storageKey(prefix))
+  } catch { /* ignore */ }
+}
+
 export default function TaskRunnerPage({
   idPrefix,
   title,
@@ -40,12 +62,38 @@ export default function TaskRunnerPage({
   getLog,
   getReportUrl,
 }: TaskRunnerPageProps) {
-  const [taskId, setTaskId] = useState<string | null>(null)
-  const [running, setRunning] = useState(false)
+  // 刷新恢复：若 localStorage 有正在运行的 task_id，初始化为它
+  const [taskId, setTaskId] = useState<string | null>(() => loadRunningTaskId(idPrefix))
+  const [running, setRunning] = useState<boolean>(() => !!loadRunningTaskId(idPrefix))
   const [result, setResult] = useState<EvalInvokeResponse | null>(null)
   const [logText, setLogText] = useState('')
   const [logLine, setLogLine] = useState(0)
   const [progress, setProgress] = useState(0)
+
+  const markCompleted = useCallback((id: string) => {
+    setRunning(false)
+    setResult({ status: 'ok', task_id: id })   // 构造完成 result，让 TaskMonitor 显示 Completed + report 链接
+    clearRunningTaskId(idPrefix)
+  }, [idPrefix])
+
+  // 刷新恢复时：查一次 progress，判断是仍在运行还是已完成（刷新前就跑完了）
+  useEffect(() => {
+    const id = loadRunningTaskId(idPrefix)
+    if (!id) return
+    getProgress(id)
+      .then((p) => {
+        if ((p.percent ?? 0) >= 100) {
+          markCompleted(id)
+        }
+        // 否则保持 running=true，usePolling 继续轮询 progress/log
+      })
+      .catch(() => {
+        // progress 查不到（任务已被清理）→ 视为结束
+        setRunning(false)
+        clearRunningTaskId(idPrefix)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSubmit = async (config: Record<string, unknown>) => {
     const id = createTaskId(idPrefix)
@@ -55,10 +103,14 @@ export default function TaskRunnerPage({
     setLogLine(0)
     setProgress(0)
     setResult(null)
+    saveRunningTaskId(idPrefix, id)    // 持久化，刷新可恢复
     try {
-      setResult(await submitTask(config, id))
+      const res = await submitTask(config, id)
+      setResult(res)
+      clearRunningTaskId(idPrefix)     // invoke 返回（完成）→ 清
     } catch (error) {
       setResult({ status: 'error', task_id: id, error: String(error) })
+      clearRunningTaskId(idPrefix)
     } finally {
       setRunning(false)
     }
@@ -69,9 +121,10 @@ export default function TaskRunnerPage({
     try {
       await stopTask(taskId)
     } catch {
-      // The local task state still needs to stop when the backend is unavailable.
+      // backend unavailable
     }
     setRunning(false)
+    clearRunningTaskId(idPrefix)
     setResult({ status: 'stopped', task_id: taskId })
   }
 
@@ -91,7 +144,7 @@ export default function TaskRunnerPage({
     interval: 5000,
     onData: (data) => {
       setProgress(data.percent ?? 0)
-      if (data.percent >= 100) setRunning(false)
+      if ((data.percent ?? 0) >= 100 && taskId) markCompleted(taskId)
     },
   })
 
