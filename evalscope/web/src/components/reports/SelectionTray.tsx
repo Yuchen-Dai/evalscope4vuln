@@ -1,4 +1,4 @@
-import { Eye, GitCompareArrows, X } from 'lucide-react'
+import { Eye, GitCompareArrows, Trash2, X } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
 import { MAX_COMPARE_SELECTION } from '@/domain/compare/compareModel'
 import Button from '@/components/ui/Button'
@@ -9,6 +9,7 @@ interface SelectionTrayProps {
   canViewHtml: boolean
   onViewHtml: () => void
   onCompare: () => void
+  onDelete: () => void
   onClear: () => void
 }
 
@@ -18,6 +19,7 @@ export default function SelectionTray({
   canViewHtml,
   onViewHtml,
   onCompare,
+  onDelete,
   onClear,
 }: SelectionTrayProps) {
   const { t } = useLocale()
@@ -51,6 +53,15 @@ export default function SelectionTray({
           <Button variant="primary" size="sm" disabled={count < 2} onClick={onCompare}>
             <GitCompareArrows size={14} />
             {t('reports.compare')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            className="text-[var(--danger)] border-[var(--danger)] hover:bg-[var(--danger-bg)]"
+          >
+            <Trash2 size={14} />
+            {t('reports.delete')}
           </Button>
           <button
             type="button"

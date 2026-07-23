@@ -35,7 +35,7 @@ from evalscope.utils.data_utils import (
 )
 from evalscope.utils.io_utils import OutputsStructure
 from evalscope.utils.logger import get_logger
-from ..utils import OUTPUT_DIR
+from ..utils import OUTPUT_DIR, validate_task_id
 
 logger = get_logger()
 
@@ -204,6 +204,29 @@ def _build_report_meta(report_name: str, root: str) -> dict:
 # ------------------------------------------------------------------
 # Endpoints
 # ------------------------------------------------------------------
+
+
+@bp_reports.route('/delete', methods=['DELETE'])
+def delete_report():
+    """删除选中 report：按 report_name 解析 task_id，删整个任务目录（outputs_root/<task_id>/）。"""
+    import shutil
+    report_name = request.args.get('report_name')
+    if not report_name:
+        return jsonify({'error': 'report_name is required'}), 400
+    task_id = report_name.split('@@')[0]
+    try:
+        validate_task_id(task_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    root = _root_path()
+    abs_root = os.path.abspath(root)
+    target = os.path.join(root, task_id)
+    # 安全：target 必须在 root 下（防符号链接/路径逃逸），且确实存在
+    if not os.path.isdir(target) or os.path.commonpath([os.path.abspath(target), abs_root]) != abs_root:
+        return jsonify({'error': 'Invalid or missing task directory'}), 400
+    shutil.rmtree(target)
+    logger.info(f'Deleted report task directory: {target}')
+    return jsonify({'status': 'ok', 'task_id': task_id}), 200
 
 
 @bp_reports.route('/list', methods=['GET'])

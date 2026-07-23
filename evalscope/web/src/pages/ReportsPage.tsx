@@ -218,6 +218,18 @@ export default function ReportsPage() {
     }
   }, [selectedForCompare, rootPath])
 
+  const handleDelete = useCallback(async () => {
+    if (selectedForCompare.length === 0) return
+    if (!window.confirm(`确定删除选中的 ${selectedForCompare.length} 个 report？此操作不可恢复。`)) return
+    try {
+      await Promise.all(selectedForCompare.map((n) => reportsApi.deleteReport(n)))
+      clearCompareSelection()
+      setReloadToken((n) => n + 1)
+    } catch (e) {
+      alert('删除失败: ' + String(e))
+    }
+  }, [selectedForCompare, clearCompareSelection])
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   // Distinguish the three empty-state reasons: a load failure, an
@@ -329,6 +341,7 @@ export default function ReportsPage() {
         canViewHtml={orderedSelection.length === 1}
         onViewHtml={handleViewHtml}
         onCompare={handleCompare}
+        onDelete={handleDelete}
         onClear={clearCompareSelection}
       />
     </div>

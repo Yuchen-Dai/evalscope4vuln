@@ -57,6 +57,11 @@ export async function scanReports(rootPath: string, signal?: AbortSignal): Promi
   return res.reports
 }
 
+export async function deleteReport(reportName: string): Promise<void> {
+  const r = await fetch(`${BASE}/delete?report_name=${encodeURIComponent(reportName)}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(`删除失败: ${r.status}`)
+}
+
 export async function loadReport(
   rootPath: string,
   reportName: string,

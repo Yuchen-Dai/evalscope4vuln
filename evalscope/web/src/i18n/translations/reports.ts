@@ -18,6 +18,7 @@ export const en: Dict = {
   selected: 'selected',
   compare: 'Compare',
   viewHtml: 'View HTML',
+  delete: 'Delete',
   samples: 'Samples',
   scanFirst: 'Scan a directory to view reports',
   columns: {
@@ -53,6 +54,7 @@ export const zh: Dict = {
   selected: '已选',
   compare: '对比',
   viewHtml: '查看HTML',
+  delete: '删除',
   samples: '样本数',
   scanFirst: '扫描目录以查看报告',
   columns: {
