@@ -10,6 +10,7 @@ export const getEvalProgress = evalTaskApi.progress
 export const getEvalLog = evalTaskApi.log
 export const getEvalReportUrl = evalTaskApi.reportUrl
 export const stopEvalTask = evalTaskApi.stop
+export const getEvalTasks = evalTaskApi.tasks
 
 export async function listBenchmarks(
   type?: 'text' | 'multimodal',

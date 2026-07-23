@@ -53,6 +53,19 @@ def stop_process(task_id: str) -> bool:
     return True
 
 
+def list_active_processes():
+    """Snapshot of currently-registered (task_id, Process) pairs (under lock)."""
+    with _active_lock:
+        return list(_active_processes.items())
+
+
+def is_task_running(task_id: str) -> bool:
+    """True if task_id is registered AND its process is still alive."""
+    with _active_lock:
+        proc = _active_processes.get(task_id)
+        return proc is not None and proc.is_alive()
+
+
 # ---------------------------------------------------------------------------
 # Subprocess helpers
 # ---------------------------------------------------------------------------
@@ -161,6 +174,21 @@ def run_in_subprocess(func, *args, task_id=None, **kwargs):
         'The child process may have crashed due to OOM, a missing import, '
         'GPU initialisation failure, or a signal (e.g. SIGKILL).'
     ) from None
+
+
+def start_subprocess(func, *args, task_id=None, **kwargs):
+    """异步：启动子进程跑 func，立即返回 Process（不阻塞、不收集结果）。
+
+    service invoke 异步提交用——子进程后台跑，进度/结果经 progress.json + reports/
+    落地（不走 result_queue，避免大 payload 死锁子进程退出）。完成检测靠 monitor
+    线程查 proc.is_alive()（调用方负责 unregister + close）。
+    """
+    ctx = multiprocessing.get_context('spawn')
+    p = ctx.Process(target=func, args=args, kwargs=kwargs)
+    p.start()
+    if task_id:
+        register_process(task_id, p)
+    return p
 
 
 # ---------------------------------------------------------------------------

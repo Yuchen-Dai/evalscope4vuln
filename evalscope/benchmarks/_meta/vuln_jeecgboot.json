@@ -1,0 +1,1 @@
+{"meta": {"name": "vuln_jeecgboot", "pretty_name": "Vuln-Scan: jeecgboot", "subset_list": ["default"]}, "statistics": {"total_samples": 1, "subset_stats": [{"name": "default", "sample_count": 1}]}}

@@ -2,7 +2,7 @@ import { useLocale } from '@/contexts/LocaleContext'
 import { useQueryParams } from '@/hooks/useQueryParams'
 import EvalConfigForm from '@/components/eval/EvalConfigForm'
 import TaskRunnerPage from '@/components/tasks/TaskRunnerPage'
-import { submitEvalTask, stopEvalTask, getEvalProgress, getEvalLog, getEvalReportUrl } from '@/api/eval'
+import { submitEvalTask, stopEvalTask, getEvalProgress, getEvalLog, getEvalReportUrl, getEvalTasks } from '@/api/eval'
 
 export default function EvalTaskPage() {
   const { t } = useLocale()
@@ -21,6 +21,7 @@ export default function EvalTaskPage() {
       getProgress={getEvalProgress}
       getLog={getEvalLog}
       getReportUrl={getEvalReportUrl}
+      getTasks={getEvalTasks}
       renderForm={({ onSubmit, disabled }) => (
         <EvalConfigForm onSubmit={onSubmit} disabled={disabled} initialDataset={initialDataset} />
       )}

@@ -4,8 +4,10 @@ import {
   logResponseSchema,
   progressResponseSchema,
   taskStatusResponseSchema,
+  tasksResponseSchema,
 } from './schemas'
 import type { EvalInvokeResponse, LogResponse, ProgressResponse, TaskStatusResponse } from './types'
+import type { TasksResponse } from './schemas/eval.schema'
 
 type TaskScope = 'eval' | 'perf'
 
@@ -53,6 +55,10 @@ export function createTaskApi(scope: TaskScope) {
         taskStatusResponseSchema,
         { params: { task_id: taskId }, signal },
       )
+    },
+
+    tasks(signal?: AbortSignal): Promise<TasksResponse> {
+      return apiValidated(`${basePath}/tasks`, tasksResponseSchema, { signal })
     },
   }
 }

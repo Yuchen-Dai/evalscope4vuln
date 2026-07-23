@@ -10,7 +10,7 @@
 import { z } from 'zod'
 
 /** Accepted invoke status values. */
-export const invokeStatusSchema = z.enum(['ok', 'error', 'stopped'])
+export const invokeStatusSchema = z.enum(['ok', 'error', 'stopped', 'running'])
 
 /** Runtime contract for an evaluation invoke response. */
 export const evalInvokeResponseSchema = z.object({
@@ -20,6 +20,23 @@ export const evalInvokeResponseSchema = z.object({
   table: z.string().optional(),
   error: z.string().optional(),
 })
+
+/** 任务列表条目（GET /api/v1/eval/tasks）。 */
+export const taskEntrySchema = z.object({
+  task_id: z.string(),
+  status: z.string(),
+  percent: z.number(),
+  updated_at: z.string(),
+  has_report: z.boolean(),
+})
+
+/** 任务列表响应。 */
+export const tasksResponseSchema = z.object({
+  tasks: z.array(taskEntrySchema),
+})
+
+export type TaskEntry = z.infer<typeof taskEntrySchema>
+export type TasksResponse = z.infer<typeof tasksResponseSchema>
 
 /**
  * Runtime contract for progress responses. A catchall preserves backend

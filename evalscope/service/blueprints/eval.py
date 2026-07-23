@@ -20,6 +20,7 @@ from ..utils import (
     validate_task_id,
 )
 from evalscope.api.registry import BENCHMARK_REGISTRY
+from ..utils.process import is_task_running, list_active_processes, start_subprocess
 
 logger = get_logger()
 
@@ -181,47 +182,28 @@ def _all_results_empty(result) -> bool:
     return False
 
 
-def _execute_task(task_id: str, task_config: TaskConfig, label: str = 'Task'):
-    """Run the evaluation subprocess and return a Flask response."""
+def _start_task(task_id: str, task_config: TaskConfig):
+    """异步：启动 run_task 子进程，立即返回（不阻塞）。
+
+    子进程后台跑，进度经 progress.json、结果经 reports/ 落地。前端轮询
+    /progress 和 /eval/tasks 查状态，/report 拿 HTML 报告。
+    """
     create_log_file(task_id, os.path.join('logs', 'eval_log.log'), _outputs_root())
-    try:
-        result = run_in_subprocess(run_eval_wrapper, task_config, task_id=task_id)
-        table_str = _build_result_table(task_config.work_dir)
-        if _all_results_empty(result):
-            error_msg = (
-                'Evaluation completed but no results were produced. '
-                'All samples may have failed. '
-                'Check the evaluation log for details.'
-            )
-            logger.error(f'[{task_id}] {label} produced empty results: {error_msg}')
-            return jsonify({'status': 'error', 'task_id': task_id, 'error': error_msg}), 500
-        logger.info(f'[{task_id}] {label} completed successfully')
-        return jsonify({
-            'status': 'ok',
-            'task_id': task_id,
-            'result': serialize_result(result),
-            'table': table_str
-        })
-    except Exception as e:
-        logger.error(f'[{task_id}] {label} failed: {e}')
-        return jsonify({'status': 'error', 'task_id': task_id, 'error': str(e)}), 500
+    start_subprocess(run_eval_wrapper, task_config, task_id=task_id)
+    logger.info(f'[{task_id}] Task started (async): model={task_config.model}, datasets={task_config.datasets}')
+    return jsonify({'status': 'running', 'task_id': task_id}), 202
 
 
 @bp_eval.route('/invoke', methods=['POST'])
 def run_evaluation():
-    """Run a model evaluation task (blocking).
-
-    Returns the evaluation result when the task completes.
-    """
+    """异步提交评测任务：立即返回 task_id，后台跑。"""
     data, task_id = _parse_request()
+    if is_task_running(task_id):
+        return jsonify({'error': f'Task {task_id} is already running'}), 409
 
     task_config = _build_task_config(data)
     task_config.work_dir = os.path.join(_outputs_root(), task_id)
-
-    logger.info(f'[{task_id}] Running evaluation task for model: {task_config.model}')
-    logger.info(f'[{task_id}] Datasets: {task_config.datasets}')
-
-    return _execute_task(task_id, task_config, label='Task')
+    return _start_task(task_id, task_config)
 
 
 @bp_eval.route('/stop', methods=['POST'])
@@ -244,11 +226,10 @@ def stop_evaluation():
 
 @bp_eval.route('/resume/invoke', methods=['POST'])
 def resume_evaluation():
-    """Resume a previously interrupted evaluation task (blocking).
-
-    Returns the evaluation result when the task completes.
-    """
+    """异步恢复评测任务。"""
     data, task_id = _parse_request()
+    if is_task_running(task_id):
+        return jsonify({'error': f'Task {task_id} is already running'}), 409
 
     work_dir = os.path.join(_outputs_root(), task_id)
     if not os.path.isdir(work_dir):
@@ -258,11 +239,7 @@ def resume_evaluation():
     task_config.work_dir = work_dir
     task_config.use_cache = work_dir
     task_config.rerun_review = True
-
-    logger.info(f'[{task_id}] Running resume task, work_dir: {work_dir}')
-    logger.info(f'[{task_id}] Model: {task_config.model}, Datasets: {task_config.datasets}')
-
-    return _execute_task(task_id, task_config, label='Resume task')
+    return _start_task(task_id, task_config)
 
 
 @bp_eval.route('/progress', methods=['GET'])
@@ -286,6 +263,55 @@ def get_evaluation_progress():
     except Exception as e:
         logger.error(f'Failed to get progress for task {task_id}: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+def _read_progress(task_id: str) -> dict:
+    """读 task_id 的 progress.json（不存在/损坏返回 {percent: 0.0}）。"""
+    progress_file = os.path.join(_outputs_root(), task_id, 'progress.json')
+    try:
+        with open(progress_file, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {'percent': 0.0}
+
+
+@bp_eval.route('/tasks', methods=['GET'])
+def list_tasks():
+    """列出所有任务（运行中 + 历史），全局共享，供 Tasks 页/多用户查看。"""
+    import glob as _glob
+    root = _outputs_root()
+    items = {}
+
+    # 运行中：_active_processes（过滤 is_alive）
+    for task_id, proc in list_active_processes():
+        if not proc.is_alive():
+            continue
+        p = _read_progress(task_id)
+        items[task_id] = {
+            'task_id': task_id,
+            'status': 'running',
+            'percent': p.get('percent', 0.0),
+            'updated_at': p.get('updated_at', ''),
+            'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
+        }
+
+    # 历史：扫 progress.json（eval 强制开 tracker，每个任务都有）
+    for pf in _glob.glob(os.path.join(root, '*', 'progress.json')):
+        task_id = os.path.basename(os.path.dirname(pf))
+        if task_id in items:
+            continue  # 运行中优先
+        p = _read_progress(task_id)
+        status = p.get('status', 'completed')
+        items[task_id] = {
+            'task_id': task_id,
+            'status': status,
+            'percent': p.get('percent', 100.0 if status == 'completed' else 0.0),
+            'updated_at': p.get('updated_at', ''),
+            'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
+        }
+
+    result = sorted(items.values(), key=lambda x: x.get('updated_at', ''), reverse=True)
+    return jsonify({'tasks': result}), 200
 
 
 @bp_eval.route('/report', methods=['GET'])

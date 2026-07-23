@@ -1,0 +1,1 @@
+{"meta": {"name": "vuln_flowise", "pretty_name": "Vuln-Scan: flowise", "subset_list": ["default"]}, "statistics": {"total_samples": 1, "subset_stats": [{"name": "default", "sample_count": 1}]}}

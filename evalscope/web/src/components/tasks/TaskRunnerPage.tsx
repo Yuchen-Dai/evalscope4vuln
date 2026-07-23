@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { EvalInvokeResponse, LogResponse, ProgressResponse } from '@/api/types'
+import type { TaskEntry } from '@/api/schemas/eval.schema'
 import { usePolling } from '@/hooks/usePolling'
 import Card from '@/components/ui/Card'
 import TaskMonitor from '@/components/eval/TaskMonitor'
@@ -21,32 +22,11 @@ interface TaskRunnerPageProps {
   getProgress: (taskId: string) => Promise<ProgressResponse>
   getLog: (taskId: string, tailLine: number) => Promise<LogResponse>
   getReportUrl: (taskId: string) => string
+  getTasks: (signal?: AbortSignal) => Promise<{ tasks: TaskEntry[] }>
 }
 
 function createTaskId(prefix: string): string {
   return `${prefix}_${Date.now()}`
-}
-
-// 持久化正在运行的 task_id，使刷新页面后能恢复进度/日志观察（任务在后端 spawn 子进程继续跑）
-function storageKey(prefix: string) {
-  return `vulnbench:running-task:${prefix}`
-}
-function loadRunningTaskId(prefix: string): string | null {
-  try {
-    return localStorage.getItem(storageKey(prefix))
-  } catch {
-    return null
-  }
-}
-function saveRunningTaskId(prefix: string, taskId: string) {
-  try {
-    localStorage.setItem(storageKey(prefix), taskId)
-  } catch { /* ignore quota */ }
-}
-function clearRunningTaskId(prefix: string) {
-  try {
-    localStorage.removeItem(storageKey(prefix))
-  } catch { /* ignore */ }
 }
 
 export default function TaskRunnerPage({
@@ -61,39 +41,39 @@ export default function TaskRunnerPage({
   getProgress,
   getLog,
   getReportUrl,
+  getTasks,
 }: TaskRunnerPageProps) {
-  // 刷新恢复：若 localStorage 有正在运行的 task_id，初始化为它
-  const [taskId, setTaskId] = useState<string | null>(() => loadRunningTaskId(idPrefix))
-  const [running, setRunning] = useState<boolean>(() => !!loadRunningTaskId(idPrefix))
+  const [taskId, setTaskId] = useState<string | null>(null)
+  const [running, setRunning] = useState(false)
   const [result, setResult] = useState<EvalInvokeResponse | null>(null)
   const [logText, setLogText] = useState('')
   const [logLine, setLogLine] = useState(0)
   const [progress, setProgress] = useState(0)
+  const [tasks, setTasks] = useState<TaskEntry[]>([])
 
   const markCompleted = useCallback((id: string) => {
     setRunning(false)
-    setResult({ status: 'ok', task_id: id })   // 构造完成 result，让 TaskMonitor 显示 Completed + report 链接
-    clearRunningTaskId(idPrefix)
-  }, [idPrefix])
-
-  // 刷新恢复时：查一次 progress，判断是仍在运行还是已完成（刷新前就跑完了）
-  useEffect(() => {
-    const id = loadRunningTaskId(idPrefix)
-    if (!id) return
-    getProgress(id)
-      .then((p) => {
-        if ((p.percent ?? 0) >= 100) {
-          markCompleted(id)
-        }
-        // 否则保持 running=true，usePolling 继续轮询 progress/log
-      })
-      .catch(() => {
-        // progress 查不到（任务已被清理）→ 视为结束
-        setRunning(false)
-        clearRunningTaskId(idPrefix)
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setResult({ status: 'ok', task_id: id })
   }, [])
+
+  // 任务列表：定期从服务端拉（多用户全局共享，刷新/换终端都能看到）
+  const refreshTasks = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setTasks((await getTasks(signal)).tasks)
+    } catch {
+      /* ignore */
+    }
+  }, [getTasks])
+
+  useEffect(() => {
+    const c = new AbortController()
+    refreshTasks(c.signal)
+    const timer = setInterval(() => refreshTasks(), 5000)
+    return () => {
+      c.abort()
+      clearInterval(timer)
+    }
+  }, [refreshTasks])
 
   const handleSubmit = async (config: Record<string, unknown>) => {
     const id = createTaskId(idPrefix)
@@ -103,17 +83,32 @@ export default function TaskRunnerPage({
     setLogLine(0)
     setProgress(0)
     setResult(null)
-    saveRunningTaskId(idPrefix, id)    // 持久化，刷新可恢复
     try {
-      const res = await submitTask(config, id)
-      setResult(res)
-      clearRunningTaskId(idPrefix)     // invoke 返回（完成）→ 清
+      await submitTask(config, id)   // 异步 invoke，立即返回 running（不阻塞）
+      refreshTasks()                 // 列表刷新（含新任务）
     } catch (error) {
       setResult({ status: 'error', task_id: id, error: String(error) })
-      clearRunningTaskId(idPrefix)
-    } finally {
       setRunning(false)
     }
+  }
+
+  const selectTask = (id: string) => {
+    setTaskId(id)
+    setLogText('')
+    setLogLine(0)
+    setProgress(0)
+    setResult(null)
+    // 查一次 progress 判断是运行中还是已完成
+    getProgress(id)
+      .then((p) => {
+        if ((p.percent ?? 0) >= 100) {
+          setRunning(false)
+          markCompleted(id)
+        } else {
+          setRunning(true)
+        }
+      })
+      .catch(() => setRunning(false))
   }
 
   const handleStop = async () => {
@@ -124,8 +119,8 @@ export default function TaskRunnerPage({
       // backend unavailable
     }
     setRunning(false)
-    clearRunningTaskId(idPrefix)
     setResult({ status: 'stopped', task_id: taskId })
+    refreshTasks()
   }
 
   const progressFn = useCallback(async () => {
@@ -144,7 +139,10 @@ export default function TaskRunnerPage({
     interval: 5000,
     onData: (data) => {
       setProgress(data.percent ?? 0)
-      if ((data.percent ?? 0) >= 100 && taskId) markCompleted(taskId)
+      if ((data.percent ?? 0) >= 100 && taskId) {
+        markCompleted(taskId)
+        refreshTasks()
+      }
     },
   })
 
@@ -165,7 +163,34 @@ export default function TaskRunnerPage({
     <div className="page-enter">
       <h1 className="text-xl font-semibold mb-6">{title}</h1>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title={configTitle}>{renderForm({ onSubmit: handleSubmit, disabled: running })}</Card>
+        <div className="space-y-6">
+          <Card title={configTitle}>{renderForm({ onSubmit: handleSubmit, disabled: running })}</Card>
+          <Card title="Tasks">
+            <ul className="divide-y divide-[var(--border)] max-h-72 overflow-y-auto">
+              {tasks.length === 0 && (
+                <li className="py-4 text-center text-sm text-[var(--text-muted)]">No tasks</li>
+              )}
+              {tasks.map((t) => (
+                <li key={t.task_id}>
+                  <button
+                    onClick={() => selectTask(t.task_id)}
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-card2)] ${taskId === t.task_id ? 'bg-[var(--bg-card2)]' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono truncate">{t.task_id}</span>
+                      <span
+                        className={`shrink-0 ${t.status === 'running' ? 'text-[var(--accent)]' : t.status === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}
+                      >
+                        {t.status} {Math.round(t.percent)}%
+                      </span>
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)] truncate">{t.updated_at}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
         <Card title={statusTitle}>
           <TaskMonitor
             running={running}

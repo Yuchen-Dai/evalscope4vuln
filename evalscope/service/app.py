@@ -2,6 +2,8 @@
 """Flask service for EvalScope evaluation and performance testing."""
 import multiprocessing
 import os
+import threading
+import time
 from datetime import datetime
 from flask import Flask, jsonify, send_from_directory
 
@@ -10,6 +12,26 @@ from .blueprints import bp_eval, bp_reports
 from .utils import OUTPUT_DIR as _DEFAULT_ROOT
 
 logger = get_logger()
+
+
+def _monitor_active_processes(interval: float = 2.0):
+    """周期清理已结束的异步任务子进程（异步 invoke 完成检测）。
+
+    子进程退出时 progress.json 已是终态（子进程内 ProgressTracker.__exit__ 写），
+    这里只负责从 _active_processes 移除 + 释放 Process 资源。
+    """
+    from .utils.process import list_active_processes, unregister_process
+    while True:
+        for task_id, proc in list_active_processes():
+            if not proc.is_alive():
+                unregister_process(task_id)
+                try:
+                    proc.close()
+                except Exception:
+                    pass
+                logger.info(f'[monitor] Task {task_id} finished, cleaned up.')
+        time.sleep(interval)
+
 
 # Path to the built React SPA (web/dist).  Resolved relative to the
 # repository root so that ``pip install -e .`` works out of the box.
@@ -136,7 +158,9 @@ def run_service(host: str = '0.0.0.0', port: int = 9000, debug: bool = False, ou
     logger.info(f'Dashboard: {dashboard_url}')
     print(f'\n  🌐 EvalScope Dashboard: {dashboard_url}\n')
 
-    app.run(host=host, port=port, debug=debug)
+    # 启动 monitor 线程：周期清理已结束的异步任务子进程
+    threading.Thread(target=_monitor_active_processes, daemon=True).start()
+    app.run(host=host, port=port, debug=debug, threaded=True)
 
 
 if __name__ == '__main__':
