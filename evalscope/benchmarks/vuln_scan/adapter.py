@@ -3,6 +3,7 @@
 # 本文件只定义通用类；每个数据集由 registry_adapter.py 扫描 datasets/ 动态注册成 benchmark。
 import asyncio
 import json
+import os
 import time
 from typing import Any, Dict, List
 
@@ -108,12 +109,10 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             record_scan = meta.get('scan_config') or {}
             meta['scan_config'] = {
                 **record_scan,
-                **{k: v for k, v in tc_scan.items() if k not in ('repo_name', 'gt_file')},
+                **{k: v for k, v in tc_scan.items() if k != 'repo_name'},
             }
             if tc_scan.get('repo_name'):
                 meta['repo_name'] = tc_scan['repo_name']
-            if tc_scan.get('gt_file'):
-                meta['gt_file'] = tc_scan['gt_file']
         return Sample(
             input=record.get('input') or f"Scan target: {meta.get('repo_name', 'unknown')}",
             target=record.get('target', '') or '',
@@ -151,8 +150,9 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             raw = task_state.output.metadata.get('findings_raw', []) or []
         findings = parse_findings(raw)
 
-        gt_file = (task_state.metadata or {}).get('gt_file')
-        gt_vulns = load_gt(gt_file).vulnerabilities if gt_file else []
+        # GT 集成在 benchmark（datasets/<name>/gt.yaml），不依赖表单/record 配置
+        gt_path = os.path.join(self._benchmark_meta.dataset_id, 'gt.yaml')
+        gt_vulns = load_gt(gt_path).vulnerabilities
 
         mr = do_match(findings, gt_vulns)
         snap = compute_metrics(mr, findings, gt_vulns)

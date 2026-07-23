@@ -16,7 +16,6 @@ interface Props {
 /** Stable field ids (label/error/focus targets). */
 const IDS = {
   repoName: 'eval-repoName',
-  gtFile: 'eval-gtFile',
   datasets: 'eval-datasets',
   platforms: 'eval-platforms',
   detectTypes: 'eval-detectTypes',
@@ -31,20 +30,18 @@ const IDS = {
 } as const
 
 const DOM_ORDER: string[] = [
-  IDS.repoName, IDS.gtFile, IDS.datasets, IDS.platforms, IDS.detectTypes,
+  IDS.repoName, IDS.datasets, IDS.platforms, IDS.detectTypes,
   IDS.modelName, IDS.maxConcurrency, IDS.priority,
   IDS.phase1Timeout, IDS.phase2Timeout, IDS.phase3Timeout,
   IDS.turingBaseUrl, IDS.pollTimeout,
 ]
 
-const DEFAULT_GT = 'data/gt/jeecgboot.yaml'
 const DEFAULT_TURING = 'http://127.0.0.1:8088'
 
 export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: Props) {
   const { t } = useLocale()
   const [datasets, setDatasets] = useState(initialDataset ?? 'vuln_jeecgboot')
   const [repoName, setRepoName] = useState('vulnbench-target')
-  const [gtFile, setGtFile] = useState(DEFAULT_GT)
   const [platforms, setPlatforms] = useState('web')
   const [detectTypes, setDetectTypes] = useState('')
   const [modelName, setModelName] = useState('')
@@ -127,7 +124,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
     e.preventDefault()
     const newErrors: Record<string, string> = {}
     if (!repoName.trim()) newErrors[IDS.repoName] = FORM_MESSAGE_KEYS.required
-    if (!gtFile.trim()) newErrors[IDS.gtFile] = FORM_MESSAGE_KEYS.required
     if (!datasets.trim()) newErrors[IDS.datasets] = FORM_MESSAGE_KEYS.required
 
     const numericChecks: Array<{ id: string; value: string; min?: number }> = [
@@ -154,7 +150,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
 
     const scan_config: Record<string, unknown> = {
       repo_name: repoName.trim(),
-      gt_file: gtFile.trim(),
       platforms: platforms.trim() || 'web',
       detect_types: detectTypes.trim(),
       model_name: modelName.trim(),
@@ -198,7 +193,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {textField(IDS.repoName, 'eval.scanConfig.repoName', repoName, setRepoName, { placeholder: 'vulnbench-target', required: true })}
-        {textField(IDS.gtFile, 'eval.scanConfig.gtFile', gtFile, setGtFile, { placeholder: '/path/to/gt.yaml', required: true })}
 
         {/* Datasets with autocomplete */}
         <Field id={IDS.datasets} name="datasets" labelKey="eval.datasets" required error={errMsg(IDS.datasets)} autoComplete="off" className="relative">
