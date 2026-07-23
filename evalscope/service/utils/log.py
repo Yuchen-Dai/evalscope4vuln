@@ -18,14 +18,14 @@ def validate_task_id(task_id: str) -> None:
         raise ValueError('Invalid task_id')
 
 
-def create_log_file(task_id: str, sub_path: str) -> str:
+def create_log_file(task_id: str, sub_path: str, outputs_root: str = None) -> str:
     """Create an empty log file for a given task so that log polling does not raise FileNotFoundError.
 
     Returns the absolute path of the created log file.
     """
     validate_task_id(task_id)
 
-    log_file = os.path.join(OUTPUT_DIR, task_id, sub_path)
+    log_file = os.path.join(outputs_root or OUTPUT_DIR, task_id, sub_path)
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
     if not os.path.exists(log_file):
         with open(log_file, 'w', encoding='utf-8'):
@@ -33,7 +33,7 @@ def create_log_file(task_id: str, sub_path: str) -> str:
     return log_file
 
 
-def get_log_content(task_id: str, sub_path: str, start_line: int = None, page: int = 500) -> dict:
+def get_log_content(task_id: str, sub_path: str, start_line: int = None, page: int = 500, outputs_root: str = None) -> dict:
     """Read log content for a given task with pagination support.
 
     Args:
@@ -57,7 +57,7 @@ def get_log_content(task_id: str, sub_path: str, start_line: int = None, page: i
     if start_line is not None and start_line < 0:
         raise ValueError('start_line must be >= 0')
 
-    log_file = os.path.join(OUTPUT_DIR, task_id, sub_path)
+    log_file = os.path.join(outputs_root or OUTPUT_DIR, task_id, sub_path)
     if not os.path.exists(log_file):
         return {'text': '', 'head_line': 0, 'tail_line': 0, 'total_lines': 0}
 

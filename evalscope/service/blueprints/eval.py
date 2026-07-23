@@ -183,7 +183,7 @@ def _all_results_empty(result) -> bool:
 
 def _execute_task(task_id: str, task_config: TaskConfig, label: str = 'Task'):
     """Run the evaluation subprocess and return a Flask response."""
-    create_log_file(task_id, os.path.join('logs', 'eval_log.log'))
+    create_log_file(task_id, os.path.join('logs', 'eval_log.log'), _outputs_root())
     try:
         result = run_in_subprocess(run_eval_wrapper, task_config, task_id=task_id)
         table_str = _build_result_table(task_config.work_dir)
@@ -331,7 +331,7 @@ def get_evaluation_log():
     page = request.args.get('page', 500, type=int)
 
     try:
-        result = get_log_content(task_id, os.path.join('logs', 'eval_log.log'), start_line, page)
+        result = get_log_content(task_id, os.path.join('logs', 'eval_log.log'), start_line, page, _outputs_root())
         return jsonify(result), 200
     except Exception as e:
         logger.error(f'Failed to get evaluation log: {str(e)}')
