@@ -15,6 +15,7 @@ interface Props {
 
 /** Stable field ids (label/error/focus targets). */
 const IDS = {
+  projectName: 'eval-projectName',
   datasets: 'eval-datasets',
   platforms: 'eval-platforms',
   detectTypes: 'eval-detectTypes',
@@ -29,7 +30,7 @@ const IDS = {
 } as const
 
 const DOM_ORDER: string[] = [
-  IDS.datasets, IDS.platforms, IDS.detectTypes,
+  IDS.projectName, IDS.datasets, IDS.platforms, IDS.detectTypes,
   IDS.modelName, IDS.maxConcurrency, IDS.priority,
   IDS.phase1Timeout, IDS.phase2Timeout, IDS.phase3Timeout,
   IDS.turingBaseUrl, IDS.pollTimeout,
@@ -39,6 +40,7 @@ const DEFAULT_TURING = 'http://127.0.0.1:8088'
 
 export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: Props) {
   const { t } = useLocale()
+  const [projectName, setProjectName] = useState('')
   const [datasets, setDatasets] = useState(initialDataset ?? 'vuln_jeecgboot')
   const [platforms, setPlatforms] = useState('web')
   const [detectTypes, setDetectTypes] = useState('')
@@ -121,6 +123,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
   const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     const newErrors: Record<string, string> = {}
+    if (!projectName.trim()) newErrors[IDS.projectName] = FORM_MESSAGE_KEYS.required
     if (!datasets.trim()) newErrors[IDS.datasets] = FORM_MESSAGE_KEYS.required
 
     const numericChecks: Array<{ id: string; value: string; min?: number }> = [
@@ -146,6 +149,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
     setErrors({})
 
     const scan_config: Record<string, unknown> = {
+      project_name: projectName.trim(),
       platforms: platforms.trim() || 'web',
       detect_types: detectTypes.trim(),
       model_name: modelName.trim(),
@@ -229,6 +233,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
           )}
         </Field>
 
+        {textField(IDS.projectName, 'eval.scanConfig.projectName', projectName, setProjectName, { placeholder: '唯一项目名（图灵不允许重名）', required: true })}
         {textField(IDS.platforms, 'eval.scanConfig.platforms', platforms, setPlatforms, { placeholder: 'web' })}
         {textField(IDS.detectTypes, 'eval.scanConfig.detectTypes', detectTypes, setDetectTypes, { placeholder: 'surfaces@endpoint,taints@sqli' })}
         {textField(IDS.modelName, 'eval.scanConfig.modelName', modelName, setModelName, { placeholder: t('eval.scanConfig.modelNamePlaceholder') })}

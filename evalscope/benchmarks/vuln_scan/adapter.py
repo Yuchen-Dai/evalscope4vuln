@@ -103,14 +103,19 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
 
     # record → Sample：扫描配置与 GT 路径都放 metadata
     def record_to_sample(self, record: Dict[str, Any]) -> Sample:
-        # project_name 等目标信息来自 benchmark dataset（default_test.jsonl 的 metadata），不依赖表单
         meta = dict(record.get('metadata', {}) or {})
         tc = self._task_config
         if tc is not None:
             # scan_config 透传 key 用本 benchmark 的 name（如 vuln_jeecgboot）
             name = self._benchmark_meta.name
             tc_scan = ((tc.dataset_args or {}).get(name, {}) or {}).get('scan_config', {}) or {}
-            meta['scan_config'] = {**(meta.get('scan_config') or {}), **tc_scan}
+            # project_name 是运行时参数（用户每次提交指定，需唯一），从表单 scan_config 提到 metadata 顶层
+            if tc_scan.get('project_name'):
+                meta['project_name'] = tc_scan['project_name']
+            meta['scan_config'] = {
+                **(meta.get('scan_config') or {}),
+                **{k: v for k, v in tc_scan.items() if k != 'project_name'},
+            }
         return Sample(
             input=record.get('input') or f"Scan target: {meta.get('project_name', 'unknown')}",
             target=record.get('target', '') or '',
