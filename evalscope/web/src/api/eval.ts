@@ -22,3 +22,17 @@ export async function listBenchmarks(
   if (all) params.all = 'true'
   return apiValidated('/api/v1/eval/benchmarks', benchmarksResponseSchema, { params, signal })
 }
+
+/** 图灵平台列表（供 platform 字段下拉补全）。 */
+export async function listTuringPlatforms(signal?: AbortSignal): Promise<string[]> {
+  const r = await fetch('/api/v1/eval/turing/platforms', { signal })
+  if (!r.ok) return []
+  return (await r.json()).map((p: { name: string }) => p.name)
+}
+
+/** 图灵指定平台的探测类型（供 detect-types 字段多选补全）。 */
+export async function listTuringDetectTypes(platform: string, signal?: AbortSignal): Promise<{ value: string; label: string }[]> {
+  const r = await fetch(`/api/v1/eval/turing/detect-types?platform=${encodeURIComponent(platform)}`, { signal })
+  if (!r.ok) return []
+  return (await r.json()).map((d: { value: string; label: string }) => ({ value: d.value, label: d.label }))
+}

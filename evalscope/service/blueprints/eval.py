@@ -314,6 +314,36 @@ def list_tasks():
     return jsonify({'tasks': result}), 200
 
 
+# ---------------------------------------------------------------------------
+# 图灵平台配置透传（供前端 platform / detect-types 自动补全下拉用）
+# ---------------------------------------------------------------------------
+import httpx as _httpx
+
+
+def _turing_proxy(path: str, **params):
+    """透传图灵平台 GET 接口（trust_env=False 绕过本机 socks 代理）。"""
+    base = os.environ.get('TURING_URL', 'http://127.0.0.1:8088').rstrip('/')
+    try:
+        r = _httpx.get(f"{base}{path}", params=params, trust_env=False, timeout=10.0)
+        r.raise_for_status()
+        return jsonify(r.json()), 200
+    except Exception as e:
+        return jsonify({'error': f'图灵平台不可达: {e}'}), 502
+
+
+@bp_eval.route('/turing/platforms', methods=['GET'])
+def turing_platforms():
+    """透传 GET /api/platforms（平台列表，前端 platform 下拉补全）。"""
+    return _turing_proxy('/api/platforms')
+
+
+@bp_eval.route('/turing/detect-types', methods=['GET'])
+def turing_detect_types():
+    """透传 GET /api/platforms/{platform}/detect-types（探测类型，前端多选补全）。"""
+    platform = request.args.get('platform', 'web')
+    return _turing_proxy(f'/api/platforms/{platform}/detect-types')
+
+
 @bp_eval.route('/report', methods=['GET'])
 def get_evaluation_report():
     """Get the HTML evaluation report for a completed task.
