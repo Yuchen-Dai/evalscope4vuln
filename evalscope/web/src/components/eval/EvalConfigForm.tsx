@@ -17,8 +17,6 @@ interface Props {
 const IDS = {
   projectName: 'eval-projectName',
   datasets: 'eval-datasets',
-  platforms: 'eval-platforms',
-  detectTypes: 'eval-detectTypes',
   modelName: 'eval-modelName',
   maxConcurrency: 'eval-maxConcurrency',
   priority: 'eval-priority',
@@ -30,7 +28,7 @@ const IDS = {
 } as const
 
 const DOM_ORDER: string[] = [
-  IDS.projectName, IDS.datasets, IDS.platforms, IDS.detectTypes,
+  IDS.projectName, IDS.datasets,
   IDS.modelName, IDS.maxConcurrency, IDS.priority,
   IDS.phase1Timeout, IDS.phase2Timeout, IDS.phase3Timeout,
   IDS.turingBaseUrl, IDS.pollTimeout,
@@ -42,8 +40,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
   const { t } = useLocale()
   const [projectName, setProjectName] = useState('')
   const [datasets, setDatasets] = useState(initialDataset ?? 'vuln_jeecgboot')
-  const [platforms, setPlatforms] = useState('web')
-  const [detectTypes, setDetectTypes] = useState('')
   const [modelName, setModelName] = useState('')
   const [maxConcurrency, setMaxConcurrency] = useState('')
   const [priority, setPriority] = useState('100')
@@ -150,8 +146,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
 
     const scan_config: Record<string, unknown> = {
       project_name: projectName.trim(),
-      platforms: platforms.trim() || 'web',
-      detect_types: detectTypes.trim(),
       model_name: modelName.trim(),
       max_concurrency: maxConcurrency.trim(),
       priority: priority.trim() || '100',
@@ -234,8 +228,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
         </Field>
 
         {textField(IDS.projectName, 'eval.scanConfig.projectName', projectName, setProjectName, { placeholder: '唯一项目名（图灵不允许重名）', required: true })}
-        {textField(IDS.platforms, 'eval.scanConfig.platforms', platforms, setPlatforms, { placeholder: 'web' })}
-        {textField(IDS.detectTypes, 'eval.scanConfig.detectTypes', detectTypes, setDetectTypes, { placeholder: 'surfaces@endpoint,taints@sqli' })}
         {textField(IDS.modelName, 'eval.scanConfig.modelName', modelName, setModelName, { placeholder: t('eval.scanConfig.modelNamePlaceholder') })}
         {textField(IDS.maxConcurrency, 'eval.scanConfig.maxConcurrency', maxConcurrency, setMaxConcurrency, { type: 'number', min: 1, placeholder: '4' })}
         {textField(IDS.priority, 'eval.scanConfig.priority', priority, setPriority, { type: 'number', min: 0 })}
