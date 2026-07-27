@@ -1,1 +1,1 @@
-{"input":"Scan target: flowise","target":"","metadata":{"repo_name":"flowise","scan_config":{"platforms":"web","detect_types":"","priority":"100","turing_base_url":"http://127.0.0.1:8088","timeout":120}}}
+{"input":"Scan target: flowise","target":"","metadata":{"project_name":"flowise","scan_config":{"platforms":"web","detect_types":"","priority":"100","turing_base_url":"http://127.0.0.1:8088","timeout":120}}}

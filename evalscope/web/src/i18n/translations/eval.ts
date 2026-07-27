@@ -8,7 +8,7 @@ export const en: Dict = {
   status: 'Status & Logs',
   ready: 'Status: Ready',
   scanConfig: {
-    repoName: 'Target Repo',
+    projectName: 'Project Name',
     gtFile: 'Ground Truth File',
     platforms: 'Platform',
     detectTypes: 'Detect Types',
@@ -33,7 +33,7 @@ export const zh: Dict = {
   status: '运行状态与日志',
   ready: '当前状态: 准备就绪',
   scanConfig: {
-    repoName: '目标仓库',
+    projectName: '项目名称',
     gtFile: 'Ground Truth 文件',
     platforms: '平台',
     detectTypes: '探测类型',

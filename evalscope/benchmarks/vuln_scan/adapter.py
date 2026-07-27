@@ -57,13 +57,16 @@ def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
     )
 
 
-async def _scan_async(scan_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。"""
+async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[str, Any]]:
+    """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。
+
+    project_name 来自 benchmark dataset，映射到图灵 create_project 的 display_name。
+    """
     base_url = scan_cfg.get('turing_base_url') or vb_config.TURING_BASE_URL
     client = TuringClient(base_url=base_url)
     try:
         sc = _build_scan_config(scan_cfg)
-        pid = await client.create_project(sc.display_name, sc.local_path)
+        pid = await client.create_project(project_name, sc.local_path)
         job_id = await client.submit_scan(pid, sc)
         logger.info(f'[vuln_scan] project={pid} job={job_id} 开始轮询...')
         deadline = time.time() + float(scan_cfg.get('timeout', vb_config.POLL_TIMEOUT))
@@ -100,7 +103,7 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
 
     # record → Sample：扫描配置与 GT 路径都放 metadata
     def record_to_sample(self, record: Dict[str, Any]) -> Sample:
-        # repo_name 等目标信息来自 benchmark dataset（default_test.jsonl 的 metadata），不依赖表单
+        # project_name 等目标信息来自 benchmark dataset（default_test.jsonl 的 metadata），不依赖表单
         meta = dict(record.get('metadata', {}) or {})
         tc = self._task_config
         if tc is not None:
@@ -109,7 +112,7 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             tc_scan = ((tc.dataset_args or {}).get(name, {}) or {}).get('scan_config', {}) or {}
             meta['scan_config'] = {**(meta.get('scan_config') or {}), **tc_scan}
         return Sample(
-            input=record.get('input') or f"Scan target: {meta.get('repo_name', 'unknown')}",
+            input=record.get('input') or f"Scan target: {meta.get('project_name', 'unknown')}",
             target=record.get('target', '') or '',
             metadata=meta,
         )
@@ -117,18 +120,18 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
     # 调图灵 REST（不调 model.generate），拿回 finding 列表
     def run_inference(self, model: Model, sample: Sample, output_dir: str, **kwargs) -> TaskState:
         scan_cfg = (sample.metadata or {}).get('scan_config', {}) or {}
-        repo_name = (sample.metadata or {}).get('repo_name', 'unknown')
-        logger.info(f'[vuln_scan] 开始扫描 {repo_name} ...')
-        raw_findings = _run_async(_scan_async(scan_cfg))
-        logger.info(f'[vuln_scan] {repo_name} 扫描完成，finding 数={len(raw_findings)}')
+        project_name = (sample.metadata or {}).get('project_name', 'unknown')
+        logger.info(f'[vuln_scan] 开始扫描 {project_name} ...')
+        raw_findings = _run_async(_scan_async(scan_cfg, project_name))
+        logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)}')
 
         model_output = ModelOutput.from_content(
             model=model.name,
-            content=json.dumps({'repo': repo_name, 'findings_count': len(raw_findings)},
+            content=json.dumps({'project': project_name, 'findings_count': len(raw_findings)},
                                ensure_ascii=False),
             stop_reason='stop',
         )
-        model_output.metadata = {'findings_raw': raw_findings, 'repo_name': repo_name}
+        model_output.metadata = {'findings_raw': raw_findings, 'project_name': project_name}
         return TaskState(
             model=model.name,
             sample=sample,
