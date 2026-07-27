@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { useLocale } from '@/contexts/LocaleContext'
-import { listBenchmarks, listTuringPlatforms, listTuringDetectTypes } from '@/api/eval'
+import { listBenchmarks } from '@/api/eval'
 import Button from '@/components/ui/Button'
 import Field from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/formStyles'
@@ -72,19 +72,8 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
         const names = [...(res.text ?? []).map((b) => b.name), ...(res.multimodal ?? []).map((b) => b.name)]
         setBenchmarkNames(names)
       }).catch(() => {})
-    // 图灵平台列表（platform 下拉补全）
-    listTuringPlatforms(controller.signal).then(setTuringPlatforms).catch(() => {})
     return () => controller.abort()
   }, [])
-
-  // 图灵探测类型（detect-types 多选补全，随 platform 变化）
-  const [turingPlatforms, setTuringPlatforms] = useState<string[]>([])
-  const [detectTypeOptions, setDetectTypeOptions] = useState<{ value: string; label: string }[]>([])
-  useEffect(() => {
-    const controller = new AbortController()
-    listTuringDetectTypes(platforms || 'web', controller.signal).then(setDetectTypeOptions).catch(() => {})
-    return () => controller.abort()
-  }, [platforms])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -183,7 +172,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
     labelKey: string,
     value: string,
     onChange: (v: string) => void,
-    opts: { type?: string; placeholder?: string; min?: number; required?: boolean; list?: string } = {},
+    opts: { type?: string; placeholder?: string; min?: number; required?: boolean } = {},
   ) => (
     <Field id={id} name={id} labelKey={labelKey} error={errMsg(id)} required={opts.required}>
       {(aria) => (
@@ -191,7 +180,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
           {...aria}
           type={opts.type ?? 'text'}
           min={opts.min}
-          list={opts.list}
           value={value}
           onChange={(e) => { onChange(e.target.value); clearErr(id) }}
           className={inputClass(errMsg(id))}
@@ -200,14 +188,6 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
       )}
     </Field>
   )
-
-  // 原生 datalist 补全：platform 单选、detect-types 多选（逗号分隔的最后一个 token 补全）
-  const platformsListId = `${useId()}-platforms-list`
-  const detectTypesListId = `${useId()}-detectTypes-list`
-  const handleDetectTypesChange = (val: string) => {
-    setDetectTypes(val)
-    clearErr(IDS.detectTypes)
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -254,14 +234,8 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
         </Field>
 
         {textField(IDS.projectName, 'eval.scanConfig.projectName', projectName, setProjectName, { placeholder: '唯一项目名（图灵不允许重名）', required: true })}
-        {textField(IDS.platforms, 'eval.scanConfig.platforms', platforms, setPlatforms, { placeholder: 'web', list: platformsListId })}
-        <datalist id={platformsListId}>
-          {turingPlatforms.map((p) => <option key={p} value={p} />)}
-        </datalist>
-        {textField(IDS.detectTypes, 'eval.scanConfig.detectTypes', detectTypes, handleDetectTypesChange, { placeholder: 'surfaces@endpoint,taints@sqli', list: detectTypesListId })}
-        <datalist id={detectTypesListId}>
-          {detectTypeOptions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-        </datalist>
+        {textField(IDS.platforms, 'eval.scanConfig.platforms', platforms, setPlatforms, { placeholder: 'web' })}
+        {textField(IDS.detectTypes, 'eval.scanConfig.detectTypes', detectTypes, setDetectTypes, { placeholder: 'surfaces@endpoint,taints@sqli' })}
         {textField(IDS.modelName, 'eval.scanConfig.modelName', modelName, setModelName, { placeholder: t('eval.scanConfig.modelNamePlaceholder') })}
         {textField(IDS.maxConcurrency, 'eval.scanConfig.maxConcurrency', maxConcurrency, setMaxConcurrency, { type: 'number', min: 1, placeholder: '4' })}
         {textField(IDS.priority, 'eval.scanConfig.priority', priority, setPriority, { type: 'number', min: 0 })}
