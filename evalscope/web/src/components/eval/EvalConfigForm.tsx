@@ -227,7 +227,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
           )}
         </Field>
 
-        {textField(IDS.projectName, 'eval.scanConfig.projectName', projectName, setProjectName, { placeholder: '唯一项目名（图灵不允许重名）', required: true })}
+        {textField(IDS.projectName, 'eval.scanConfig.projectName', projectName, setProjectName, { placeholder: t('eval.scanConfig.projectNamePlaceholder'), required: true })}
         {textField(IDS.modelName, 'eval.scanConfig.modelName', modelName, setModelName, { placeholder: t('eval.scanConfig.modelNamePlaceholder') })}
         {textField(IDS.maxConcurrency, 'eval.scanConfig.maxConcurrency', maxConcurrency, setMaxConcurrency, { type: 'number', min: 1, placeholder: '4' })}
         {textField(IDS.priority, 'eval.scanConfig.priority', priority, setPriority, { type: 'number', min: 0 })}

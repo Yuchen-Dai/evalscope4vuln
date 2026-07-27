@@ -9,6 +9,7 @@ export const en: Dict = {
   ready: 'Status: Ready',
   scanConfig: {
     projectName: 'Project Name',
+    projectNamePlaceholder: 'unique project name',
     gtFile: 'Ground Truth File',
     platforms: 'Platform',
     detectTypes: 'Detect Types',
@@ -34,6 +35,7 @@ export const zh: Dict = {
   ready: '当前状态: 准备就绪',
   scanConfig: {
     projectName: '项目名称',
+    projectNamePlaceholder: '唯一项目名',
     gtFile: 'Ground Truth 文件',
     platforms: '平台',
     detectTypes: '探测类型',
