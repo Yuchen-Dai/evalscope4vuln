@@ -52,7 +52,10 @@ def create_app(outputs: str = None):
     if outputs:
         app.config['OUTPUTS_ROOT'] = os.path.abspath(outputs)
     else:
-        app.config['OUTPUTS_ROOT'] = None
+        # 默认输出目录：evalscope 包目录下 outputs/（自动创建，新机器开箱即用）
+        default_outputs = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'outputs')
+        os.makedirs(default_outputs, exist_ok=True)
+        app.config['OUTPUTS_ROOT'] = default_outputs
 
     # Ensure non-ASCII characters (e.g. Chinese) are serialised as-is in JSON
     # responses instead of being escaped to \uXXXX sequences.

@@ -248,7 +248,14 @@ def list_reports():
     try:
         root = _root_path()
         if not root or not os.path.isdir(root):
-            return jsonify({'error': 'root_path is required and must be an existing directory'}), 400
+            # 目录不存在（新机器/还没跑过任务）→ 返回空列表而非报错
+            return jsonify({
+                'reports': [],
+                'total': 0,
+                'page': 1,
+                'page_size': 20,
+                'filters': {'available_models': [], 'available_datasets': []},
+            }), 200
 
         # --- Scan & load metadata ---
         raw_reports = scan_for_report_folders(root)
