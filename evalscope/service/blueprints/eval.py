@@ -277,6 +277,18 @@ def _read_progress(task_id: str) -> dict:
         return {'percent': 0.0}
 
 
+def _read_task_meta(task_id: str, root: str) -> dict:
+    """从 task_config.yaml 读 model（报告展示用）。"""
+    import yaml
+    cfg_path = os.path.join(root, task_id, 'configs', 'task_config.yaml')
+    try:
+        with open(cfg_path, encoding='utf-8') as f:
+            cfg = yaml.safe_load(f) or {}
+        return {'model': cfg.get('model', '')}
+    except Exception:
+        return {}
+
+
 @bp_eval.route('/tasks', methods=['GET'])
 def list_tasks():
     """列出所有任务（运行中 + 历史），全局共享，供 Tasks 页/多用户查看。"""
@@ -289,12 +301,14 @@ def list_tasks():
         if not proc.is_alive():
             continue
         p = _read_progress(task_id)
+        meta = _read_task_meta(task_id, root)
         items[task_id] = {
             'task_id': task_id,
             'status': 'running',
             'percent': p.get('percent', 0.0),
             'updated_at': p.get('updated_at', ''),
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
+            'model': meta.get('model', ''),
         }
 
     # 历史：扫 progress.json（eval 强制开 tracker，每个任务都有）
@@ -304,12 +318,14 @@ def list_tasks():
             continue  # 运行中优先
         p = _read_progress(task_id)
         status = p.get('status', 'completed')
+        meta = _read_task_meta(task_id, root)
         items[task_id] = {
             'task_id': task_id,
             'status': status,
             'percent': p.get('percent', 100.0 if status == 'completed' else 0.0),
             'updated_at': p.get('updated_at', ''),
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
+            'model': meta.get('model', ''),
         }
 
     result = sorted(items.values(), key=lambda x: x.get('updated_at', ''), reverse=True)

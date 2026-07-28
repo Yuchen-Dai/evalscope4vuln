@@ -28,6 +28,7 @@ export const taskEntrySchema = z.object({
   percent: z.number(),
   updated_at: z.string(),
   has_report: z.boolean(),
+  model: z.string().optional(),
 })
 
 /** 任务列表响应。 */

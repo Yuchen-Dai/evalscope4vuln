@@ -189,7 +189,10 @@ export default function TaskRunnerPage({
                     className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-card2)] ${taskId === t.task_id ? 'bg-[var(--bg-card2)]' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono truncate">{t.task_id}</span>
+                      <span className="truncate">
+                        {t.model && <span className="font-medium">{t.model}</span>}
+                        <span className="ml-1 text-xs text-[var(--text-dim)] font-mono">{t.task_id.split('_')[0]}_{t.task_id.slice(-6)}</span>
+                      </span>
                       <span
                         className={`shrink-0 ${t.status === 'running' ? 'text-[var(--accent)]' : t.status === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}
                       >
