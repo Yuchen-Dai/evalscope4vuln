@@ -54,7 +54,14 @@ export default function TaskRunnerPage({
   const markCompleted = useCallback((id: string) => {
     setRunning(false)
     setResult({ status: 'ok', task_id: id })
-  }, [])
+    // 任务完成时拉一次增量日志（确保最后的日志行不丢）
+    getLog(id, logLine).then((data) => {
+      if (data.text) {
+        setLogText((prev) => prev + data.text)
+        setLogLine(data.tail_line)
+      }
+    }).catch(() => {})
+  }, [getLog, logLine])
 
   // 任务列表：定期从服务端拉（多用户全局共享，刷新/换终端都能看到）
   const refreshTasks = useCallback(async (signal?: AbortSignal) => {
@@ -100,10 +107,15 @@ export default function TaskRunnerPage({
     setResult(null)
     // 查一次 progress 判断是运行中还是已完成
     getProgress(id)
-      .then((p) => {
+      .then(async (p) => {
         if ((p.percent ?? 0) >= 100) {
           setRunning(false)
           markCompleted(id)
+          // 已完成任务：拉一次完整日志（从头，因为日志轮询不会自动启动）
+          try {
+            const log = await getLog(id, 0)
+            if (log.text) { setLogText(log.text); setLogLine(log.tail_line) }
+          } catch { /* ignore */ }
         } else {
           setRunning(true)
         }
