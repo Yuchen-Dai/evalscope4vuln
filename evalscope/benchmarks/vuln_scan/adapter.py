@@ -60,6 +60,7 @@ def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
 async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[str, Any]]:
     """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。
 
+    轮询过程中每轮调 report-overview 拉增量 finding，记到日志（前端 LogViewer 实时展示）。
     project_name 来自 benchmark dataset，映射到图灵 create_project 的 display_name。
     """
     base_url = scan_cfg.get('turing_base_url') or vb_config.TURING_BASE_URL
@@ -79,6 +80,16 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[
                 if time.time() > deadline:
                     break
                 continue
+            # 每轮拉 report-overview 看增量 finding（写日志，前端 LogViewer 实时展示）
+            try:
+                overview = await client.get_report_overview(pid, job_id)
+                cur_findings = overview.get('findings') or []
+                if cur_findings:
+                    logger.info(f'[vuln_scan] 已发现 {len(cur_findings)} 个漏洞（状态: {st.get("status", "?")}）')
+                else:
+                    logger.info(f'[vuln_scan] 扫描中，暂无 finding（状态: {st.get("status", "?")}）')
+            except Exception:
+                logger.info(f'[vuln_scan] 扫描中（状态: {st.get("status", "?")}）')
             if st.get('status') == 'completed':
                 break
             if time.time() > deadline:
