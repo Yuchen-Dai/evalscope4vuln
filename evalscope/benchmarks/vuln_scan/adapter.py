@@ -60,7 +60,8 @@ def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
 async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[str, Any]]:
     """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。
 
-    轮询过程中每轮调 report-overview 拉增量 finding，记到日志（前端 LogViewer 实时展示）。
+    轮询采用指数退避（初始 5s，每轮 ×1.5，上限 120s），适配数小时的长任务。
+    每轮调 report-overview 拉增量 finding 数，记到日志（前端 LogViewer 实时展示）。
     project_name 来自 benchmark dataset，映射到图灵 create_project 的 display_name。
     """
     base_url = scan_cfg.get('turing_base_url') or vb_config.TURING_BASE_URL
@@ -69,31 +70,47 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[
         sc = _build_scan_config(scan_cfg)
         pid = await client.create_project(project_name, sc.local_path)
         job_id = await client.submit_scan(pid, sc)
-        logger.info(f'[vuln_scan] project={pid} job={job_id} 开始轮询...')
+        logger.info(f'[vuln_scan] project={pid} job={job_id} 开始轮询（指数退避: 初始 5s, 上限 120s）')
         deadline = time.time() + float(scan_cfg.get('timeout', vb_config.POLL_TIMEOUT))
+        interval = 5.0       # 初始轮询间隔
+        max_interval = 120.0  # 上限（避免退避太久）
+        poll_count = 0
+        prev_finding_count = -1
         while True:
-            await asyncio.sleep(vb_config.POLL_INTERVAL)
+            poll_count += 1
+            await asyncio.sleep(interval)
             try:
                 st = await client.get_status(pid, job_id)
-            except Exception as e:  # 单次查询失败不终止
-                logger.warning(f'[vuln_scan] 状态查询失败: {e}')
+            except Exception as e:
+                logger.warning(f'[vuln_scan] 第{poll_count}轮状态查询失败（间隔{interval:.0f}s）: {e}')
                 if time.time() > deadline:
                     break
+                interval = min(interval * 1.5, max_interval)
                 continue
             # 每轮拉 report-overview 看增量 finding（写日志，前端 LogViewer 实时展示）
             try:
                 overview = await client.get_report_overview(pid, job_id)
                 cur_findings = overview.get('findings') or []
-                if cur_findings:
-                    logger.info(f'[vuln_scan] 已发现 {len(cur_findings)} 个漏洞（状态: {st.get("status", "?")}）')
+                cur_count = len(cur_findings)
+                status_str = st.get('status', '?')
+                if cur_count != prev_finding_count:
+                    # finding 数有变化（新增）→ 重置退避（可能正在密集产出）
+                    logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
+                                f'已发现 {cur_count} 个漏洞（状态: {status_str}）')
+                    prev_finding_count = cur_count
+                    interval = 5.0   # 有新 finding → 重置为初始间隔（密集期）
                 else:
-                    logger.info(f'[vuln_scan] 扫描中，暂无 finding（状态: {st.get("status", "?")}）')
+                    logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
+                                f'已发现 {cur_count} 个漏洞，无新增（状态: {status_str}）')
+                    interval = min(interval * 1.5, max_interval)
             except Exception:
-                logger.info(f'[vuln_scan] 扫描中（状态: {st.get("status", "?")}）')
+                logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: 扫描中（状态: {st.get("status", "?")}）')
+                interval = min(interval * 1.5, max_interval)
             if st.get('status') == 'completed':
+                logger.info(f'[vuln_scan] 任务完成，共轮询 {poll_count} 轮')
                 break
             if time.time() > deadline:
-                logger.warning('[vuln_scan] 轮询超时，取当前结果')
+                logger.warning(f'[vuln_scan] 轮询超时（{poll_count}轮），取当前结果')
                 break
         data = await client.get_report_data(pid, job_id)
         return data.get('findings') or []
