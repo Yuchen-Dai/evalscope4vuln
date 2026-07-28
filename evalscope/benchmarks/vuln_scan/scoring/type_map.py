@@ -122,9 +122,23 @@ def _clean(raw: str) -> str:
 def normalize(raw: str | None) -> str:
     """把任意 vuln_type 写法归一到规范类型。
 
-    未命中 ALIASES 时返回清洗后的原值（不丢失，可能成为新的规范类型）。
+    匹配顺序：
+    1. 整体命中 ALIASES（如 ``path-traversal`` / ``越权访问``）。
+    2. 复合串按连续 token 片段滑窗查 ALIASES，**最长匹配优先**
+       （如 ``broken-access-control-垂直越权`` 含 ``垂直越权`` → broken-access-control；
+        ``参数污染-spring4shell-rce`` 含 ``rce`` → command-injection）。
+    3. 均未命中 → 返回清洗后的原值（不丢失，可能成为新规范类型，或归入 other-fp 汇总桶）。
     """
     if not raw:
         return "unknown"
     cleaned = _clean(raw)
-    return ALIASES.get(cleaned, cleaned)
+    if cleaned in ALIASES:
+        return ALIASES[cleaned]
+    tokens = [t for t in cleaned.split("-") if t]
+    n = len(tokens)
+    for length in range(n, 0, -1):            # 长片段优先（更具体，歧义更小）
+        for i in range(n - length + 1):
+            cand = "-".join(tokens[i:i + length])
+            if cand in ALIASES:
+                return ALIASES[cand]
+    return cleaned
