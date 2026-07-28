@@ -57,12 +57,13 @@ def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
     )
 
 
-async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[str, Any]]:
+async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: str = '') -> List[Dict[str, Any]]:
     """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。
 
     轮询采用指数退避（初始 5s，每轮 ×1.5，上限 120s），适配数小时的长任务。
     每轮调 report-overview 拉增量 finding 数，记到日志（前端 LogViewer 实时展示）。
     project_name 来自 benchmark dataset，映射到图灵 create_project 的 display_name。
+    model_name 从前端 scan_config 透传（用于日志展示 + 图灵 submit_scan）。
     """
     base_url = scan_cfg.get('turing_base_url') or vb_config.TURING_BASE_URL
     client = TuringClient(base_url=base_url)
@@ -70,7 +71,9 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str) -> List[Dict[
         sc = _build_scan_config(scan_cfg)
         pid = await client.create_project(project_name, sc.local_path)
         job_id = await client.submit_scan(pid, sc)
-        logger.info(f'[vuln_scan] project={pid} job={job_id} 开始轮询（指数退避: 初始 5s, 上限 120s）')
+        logger.info(f'[vuln_scan] project={pid} job={job_id} 模型={model_name or "(默认)"} '
+                    f'平台={sc.platforms} 探测类型={len(sc.detect_types.split(",")) if sc.detect_types else 0}项 '
+                    f'开始轮询（指数退避: 初始 5s, 上限 120s）')
         deadline = time.time() + float(scan_cfg.get('timeout', vb_config.POLL_TIMEOUT))
         interval = 5.0       # 初始轮询间隔
         max_interval = 120.0  # 上限（避免退避太久）
@@ -154,8 +157,9 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
     def run_inference(self, model: Model, sample: Sample, output_dir: str, **kwargs) -> TaskState:
         scan_cfg = (sample.metadata or {}).get('scan_config', {}) or {}
         project_name = (sample.metadata or {}).get('project_name', 'unknown')
-        logger.info(f'[vuln_scan] 开始扫描 {project_name} ...')
-        raw_findings = _run_async(_scan_async(scan_cfg, project_name))
+        model_name = scan_cfg.get('model_name') or model.name or '(默认)'
+        logger.info(f'[vuln_scan] 开始扫描 {project_name}（模型: {model_name}）...')
+        raw_findings = _run_async(_scan_async(scan_cfg, project_name, model_name))
         logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)}')
 
         model_output = ModelOutput.from_content(

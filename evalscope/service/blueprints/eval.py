@@ -150,7 +150,9 @@ def _build_task_config(data: dict) -> TaskConfig:
     if not data.get('eval_type'):
         data['eval_type'] = EvalType.MOCK_LLM
     if not data.get('model'):
-        data['model'] = 'turing_scanner'
+        # 用前端填的扫描模型名作为 evalscope 报告的"模型"列（没填则回退占位）
+        scan_model = (data.get('scan_config') or {}).get('model_name', '')
+        data['model'] = scan_model.strip() or 'turing_scanner'
     # scan_config 透传到所选的每个 vuln_* benchmark（adapter 在 record_to_sample
     # 通过 self._task_config.dataset_args[self._benchmark_meta.name] 读取）
     scan_config = data.get('scan_config') or {}
