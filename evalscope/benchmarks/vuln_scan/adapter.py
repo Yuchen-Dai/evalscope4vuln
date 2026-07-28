@@ -69,11 +69,19 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
     client = TuringClient(base_url=base_url)
     try:
         sc = _build_scan_config(scan_cfg)
+        # 创建项目
+        logger.info(f'[vuln_scan] → POST /projects/local  display_name="{project_name}" local_path="{sc.local_path}"')
         pid = await client.create_project(project_name, sc.local_path)
+        logger.info(f'[vuln_scan] ← project_id={pid}')
+        # 提交扫描
+        logger.info(f'[vuln_scan] → POST /scan  platforms={sc.platforms} '
+                    f'detect_types={len(sc.detect_types.split(",")) if sc.detect_types else 0}项 '
+                    f'priority={sc.priority} model_name={model_name or "(默认)"} '
+                    f'max_concurrency={sc.max_concurrency or "(默认)"} '
+                    f'phase_timeout=({sc.phase1_timeout or "-"}/{sc.phase2_timeout or "-"}/{sc.phase3_timeout or "-"})')
         job_id = await client.submit_scan(pid, sc)
-        logger.info(f'[vuln_scan] project={pid} job={job_id} 模型={model_name or "(默认)"} '
-                    f'平台={sc.platforms} 探测类型={len(sc.detect_types.split(",")) if sc.detect_types else 0}项 '
-                    f'开始轮询（指数退避: 初始 5s, 上限 120s）')
+        logger.info(f'[vuln_scan] ← job_id={job_id}')
+        logger.info(f'[vuln_scan] 开始轮询（指数退避: 初始 5s, 上限 120s, 图灵: {base_url}）')
         deadline = time.time() + float(scan_cfg.get('timeout', vb_config.POLL_TIMEOUT))
         interval = 5.0       # 初始轮询间隔
         max_interval = 120.0  # 上限（避免退避太久）
@@ -115,9 +123,13 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
             if time.time() > deadline:
                 logger.warning(f'[vuln_scan] 轮询超时（{poll_count}轮），取当前结果')
                 break
+        logger.info(f'[vuln_scan] → GET /report-data  project={pid} job={job_id}')
         data = await client.get_report_data(pid, job_id)
-        return data.get('findings') or []
+        findings = data.get('findings') or []
+        logger.info(f'[vuln_scan] ← 获取完成: {len(findings)} 个 finding')
+        return findings
     finally:
+        logger.info('[vuln_scan] 关闭图灵连接')
         await client.aclose()
 
 
