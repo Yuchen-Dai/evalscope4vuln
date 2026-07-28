@@ -191,7 +191,7 @@ export default function TaskRunnerPage({
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate">
                         {t.model && <span className="font-medium">{t.model}</span>}
-                        <span className="ml-1 text-xs text-[var(--text-dim)] font-mono">{t.task_id.split('_')[0]}_{t.task_id.slice(-6)}</span>
+                        {t.dataset && <span className="ml-1 text-xs text-[var(--text-muted)]">{t.dataset}</span>}
                       </span>
                       <span
                         className={`shrink-0 ${t.status === 'running' ? 'text-[var(--accent)]' : t.status === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}

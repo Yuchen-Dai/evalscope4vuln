@@ -29,6 +29,7 @@ export const taskEntrySchema = z.object({
   updated_at: z.string(),
   has_report: z.boolean(),
   model: z.string().optional(),
+  dataset: z.string().optional(),
 })
 
 /** 任务列表响应。 */

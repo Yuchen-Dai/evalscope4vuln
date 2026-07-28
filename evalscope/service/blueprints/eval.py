@@ -278,13 +278,30 @@ def _read_progress(task_id: str) -> dict:
 
 
 def _read_task_meta(task_id: str, root: str) -> dict:
-    """从 task_config.yaml 读 model（报告展示用）。"""
+    """从 report JSON 读 model + dataset（任务列表展示用）。"""
+    import glob as _glob
+    # 优先从 report JSON 读（最准，含 model/dataset）
+    for rj in _glob.glob(os.path.join(root, task_id, 'reports', '*', '*.json')):
+        try:
+            with open(rj, encoding='utf-8') as f:
+                rep = json.load(f)
+            return {
+                'model': rep.get('model_name', ''),
+                'dataset': rep.get('dataset_name', ''),
+            }
+        except Exception:
+            continue
+    # 回退：从 task_config.yaml 读 model + datasets
     import yaml
     cfg_path = os.path.join(root, task_id, 'configs', 'task_config.yaml')
     try:
         with open(cfg_path, encoding='utf-8') as f:
             cfg = yaml.safe_load(f) or {}
-        return {'model': cfg.get('model', '')}
+        datasets = cfg.get('datasets') or []
+        return {
+            'model': cfg.get('model', ''),
+            'dataset': datasets[0] if datasets else '',
+        }
     except Exception:
         return {}
 
@@ -309,6 +326,7 @@ def list_tasks():
             'updated_at': p.get('updated_at', ''),
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
             'model': meta.get('model', ''),
+            'dataset': meta.get('dataset', ''),
         }
 
     # 历史：扫 progress.json（eval 强制开 tracker，每个任务都有）
@@ -326,6 +344,7 @@ def list_tasks():
             'updated_at': p.get('updated_at', ''),
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
             'model': meta.get('model', ''),
+            'dataset': meta.get('dataset', ''),
         }
 
     result = sorted(items.values(), key=lambda x: x.get('updated_at', ''), reverse=True)
