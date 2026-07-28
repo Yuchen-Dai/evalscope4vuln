@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocale } from '@/contexts/LocaleContext'
 import { getAnalysis, getDataFrame } from '@/api/reports'
 import Card from '@/components/ui/Card'
 import Table from '@/components/ui/Table'
+import VulnScoreMatrix, { tryParseMatrix } from './VulnScoreMatrix'
 import { scoreColor } from '@/utils/colorScale'
 import { formatMetricByKey, getBoundedMetricRatio } from '@/domain/metric/registry'
 import MarkdownRenderer from '@/components/common/MarkdownRenderer'
@@ -53,6 +54,9 @@ export default function DetailsTab({ reportName, datasetName, rootPath, perfMetr
 
   // Detect whether data has Metric column
   const hasMetricCol = subsetData.data.length > 0 && 'Metric' in subsetData.data[0]
+
+  // 漏洞 benchmark 的 Metric 形如 `vuln_type/指标` → pivot 成矩阵；否则回退扁平 Table
+  const matrixModel = useMemo(() => tryParseMatrix(subsetData.data), [subsetData.data])
 
   const subsetColumns = [
     {
@@ -156,11 +160,15 @@ export default function DetailsTab({ reportName, datasetName, rootPath, perfMetr
       {/* Subset Scores Table */}
       {subsetData.data.length > 0 && (
         <Card title={t('reportDetail.subsetScores')}>
-          <Table
-            columns={subsetColumns}
-            data={subsetData.data}
-            defaultSort={{ key: 'Score', dir: 'desc' }}
-          />
+          {matrixModel ? (
+            <VulnScoreMatrix model={matrixModel} />
+          ) : (
+            <Table
+              columns={subsetColumns}
+              data={subsetData.data}
+              defaultSort={{ key: 'Score', dir: 'desc' }}
+            />
+          )}
         </Card>
       )}
 
