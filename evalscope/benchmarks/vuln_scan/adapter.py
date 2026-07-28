@@ -205,10 +205,12 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         snap = compute_metrics(mr, findings, gt_vulns)
 
         score = Score(extracted_prediction=filtered_prediction, prediction=original_prediction)
+        # F1 排首位：Report.score 取 metrics[0]（report.py:_set_score），首个 key
+        # 决定顶部 Overall Score 卡片显示哪个指标 → 让它显示主分数 F1 而非 Precision。
         score.value.update({
+            'Overall/F1': snap.f1,
             'Overall/Precision': snap.precision,
             'Overall/Recall': snap.recall,
-            'Overall/F1': snap.f1,
             'Overall/Coverage': snap.coverage,
             'Overall/TP': snap.tp,
             'Overall/FP': snap.fp,

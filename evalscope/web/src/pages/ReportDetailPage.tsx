@@ -73,9 +73,18 @@ export default function ReportDetailPage() {
   // Derive overall info from report list
   const modelName = reportList[0]?.model_name ?? reportName
   const primaryDataset = reportList[0]?.dataset_name ?? ''
+
+  // metrics[0].name 形如 `Overall/F1`（vuln benchmark）→ 取右段纯指标名，让
+  // formatMetricByKey 能识别（整串归一后不在 registry，进度环/百分比会失效）。
+  const mainMetricKey = (name?: string): string => {
+    if (!name) return 'score'
+    const idx = name.lastIndexOf('/')
+    return idx >= 0 ? name.slice(idx + 1) : name
+  }
+
   const overallMetric = useMemo(() => {
     if (reportList.length === 0) return { score: null, metricName: '' }
-    const metricNames = reportList.map((report) => report.metrics[0]?.name ?? 'score')
+    const metricNames = reportList.map((report) => mainMetricKey(report.metrics[0]?.name))
     const firstKey = resolveMetricKey(metricNames[0])
     if (!metricNames.every((name) => resolveMetricKey(name) === firstKey)) {
       return { score: null, metricName: '' }
@@ -219,7 +228,7 @@ export default function ReportDetailPage() {
               rootPath={rootPath}
               perfMetrics={reportList.find((r) => r.dataset_name === activeDataset)?.perf_metrics}
               overallScore={reportList.find((r) => r.dataset_name === activeDataset)?.score}
-              metricName={reportList.find((r) => r.dataset_name === activeDataset)?.metrics[0]?.name}
+              metricName={mainMetricKey(reportList.find((r) => r.dataset_name === activeDataset)?.metrics[0]?.name)}
               onSubsetClick={handleSubsetClick}
             />,
           ),
