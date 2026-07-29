@@ -30,6 +30,7 @@ export const taskEntrySchema = z.object({
   has_report: z.boolean(),
   model: z.string().optional(),
   dataset: z.string().optional(),
+  project_name: z.string().optional(),
 })
 
 /** 任务列表响应。 */

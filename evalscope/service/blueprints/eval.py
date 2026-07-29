@@ -285,32 +285,38 @@ def _read_progress(task_id: str) -> dict:
 
 
 def _read_task_meta(task_id: str, root: str) -> dict:
-    """从 report JSON 读 model + dataset（任务列表展示用）。"""
+    """读任务展示元信息：project_name 来自 scan_config.json；model/dataset 来自
+    report JSON（回退 task_config.yaml）。"""
     import glob as _glob
-    # 优先从 report JSON 读（最准，含 model/dataset）
+    meta: dict = {}
+    # project_name：scan_config.json（eval.py 在 invoke 时写入）
+    try:
+        with open(os.path.join(root, task_id, 'scan_config.json'), encoding='utf-8') as f:
+            meta['project_name'] = (json.load(f) or {}).get('project_name', '')
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        meta['project_name'] = ''
+    # model + dataset：优先 report JSON（最准），回退 task_config.yaml
     for rj in _glob.glob(os.path.join(root, task_id, 'reports', '*', '*.json')):
         try:
             with open(rj, encoding='utf-8') as f:
                 rep = json.load(f)
-            return {
-                'model': rep.get('model_name', ''),
-                'dataset': rep.get('dataset_name', ''),
-            }
+            meta['model'] = rep.get('model_name', '')
+            meta['dataset'] = rep.get('dataset_name', '')
+            return meta
         except Exception:
             continue
-    # 回退：从 task_config.yaml 读 model + datasets
     import yaml
     cfg_path = os.path.join(root, task_id, 'configs', 'task_config.yaml')
     try:
         with open(cfg_path, encoding='utf-8') as f:
             cfg = yaml.safe_load(f) or {}
         datasets = cfg.get('datasets') or []
-        return {
-            'model': cfg.get('model', ''),
-            'dataset': datasets[0] if datasets else '',
-        }
+        meta['model'] = cfg.get('model', '')
+        meta['dataset'] = datasets[0] if datasets else ''
     except Exception:
-        return {}
+        meta.setdefault('model', '')
+        meta.setdefault('dataset', '')
+    return meta
 
 
 @bp_eval.route('/tasks', methods=['GET'])
@@ -334,6 +340,7 @@ def list_tasks():
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
             'model': meta.get('model', ''),
             'dataset': meta.get('dataset', ''),
+            'project_name': meta.get('project_name', ''),
         }
 
     # 历史：扫 progress.json（eval 强制开 tracker，每个任务都有）
@@ -352,6 +359,7 @@ def list_tasks():
             'has_report': os.path.exists(os.path.join(root, task_id, 'reports', 'report.html')),
             'model': meta.get('model', ''),
             'dataset': meta.get('dataset', ''),
+            'project_name': meta.get('project_name', ''),
         }
 
     result = sorted(items.values(), key=lambda x: x.get('updated_at', ''), reverse=True)
