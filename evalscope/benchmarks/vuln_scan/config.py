@@ -9,6 +9,10 @@ import os
 # run.sh 会 export TURING_URL；默认指向本地 fake_turing mock
 TURING_BASE_URL = os.environ.get("TURING_URL", "http://127.0.0.1:8088").rstrip("/")
 
+# 正式图灵平台鉴权（fake_turing 不校验，默认值对两边都安全；环境变量可覆盖）
+TURING_USERNAME = os.environ.get("TURING_USERNAME", "admin")
+TURING_PASSWORD = os.environ.get("TURING_PASSWORD", "admin123")
+
 # ---- 轮询 ----
 POLL_INTERVAL = float(os.environ.get("VULNBENCH_POLL_INTERVAL", "2.5"))   # 轮询间隔（秒）
 POLL_TIMEOUT = float(os.environ.get("VULNBENCH_POLL_TIMEOUT", "1800"))    # 单个 run 总超时（秒）

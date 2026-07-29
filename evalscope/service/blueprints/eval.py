@@ -153,14 +153,8 @@ def _build_task_config(data: dict) -> TaskConfig:
         # 用前端填的扫描模型名作为 evalscope 报告的"模型"列（没填则回退占位）
         scan_model = (data.get('scan_config') or {}).get('model_name', '')
         data['model'] = scan_model.strip() or 'default'
-    # scan_config 透传到所选的每个 vuln_* benchmark（adapter 在 record_to_sample
-    # 通过 self._task_config.dataset_args[self._benchmark_meta.name] 读取）
-    scan_config = data.get('scan_config') or {}
-    if scan_config:
-        dataset_args = data.setdefault('dataset_args', {})
-        for name in (data.get('datasets') or []):
-            if name.startswith('vuln_'):
-                dataset_args.setdefault(name, {})['scan_config'] = scan_config
+    # scan_config 不再走 dataset_args[name]（会被 BenchmarkMeta._update 过滤丢弃），
+    # 改由 _write_scan_config 落盘 work_dir/scan_config.json，adapter 直接读文件。
 
     task_config = TaskConfig.from_dict(data)
     task_config.no_timestamp = True
@@ -184,6 +178,17 @@ def _all_results_empty(result) -> bool:
     return False
 
 
+def _write_scan_config(work_dir: str, scan_config: dict) -> None:
+    """把表单 scan_config 落盘到 work_dir/scan_config.json。
+
+    dataset_args[name] 加载 benchmark 时会被 BenchmarkMeta._update 过滤掉非 meta
+    字段（scan_config 会丢），改用文件透传给 adapter 的 record_to_sample。
+    """
+    os.makedirs(work_dir, exist_ok=True)
+    with open(os.path.join(work_dir, 'scan_config.json'), 'w', encoding='utf-8') as f:
+        json.dump(scan_config or {}, f, ensure_ascii=False)
+
+
 def _start_task(task_id: str, task_config: TaskConfig):
     """异步：启动 run_task 子进程，立即返回（不阻塞）。
 
@@ -205,6 +210,7 @@ def run_evaluation():
 
     task_config = _build_task_config(data)
     task_config.work_dir = os.path.join(_outputs_root(), task_id)
+    _write_scan_config(task_config.work_dir, data.get('scan_config') or {})
     return _start_task(task_id, task_config)
 
 
@@ -241,6 +247,7 @@ def resume_evaluation():
     task_config.work_dir = work_dir
     task_config.use_cache = work_dir
     task_config.rerun_review = True
+    _write_scan_config(task_config.work_dir, data.get('scan_config') or {})
     return _start_task(task_id, task_config)
 
 

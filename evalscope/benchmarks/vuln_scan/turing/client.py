@@ -95,6 +95,17 @@ class TuringClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    # ---- 鉴权 ----
+    async def login(self, username: str, password: str) -> None:
+        """登录图灵平台。
+
+        正式平台校验账密后 set-cookie ``turing_session``，后续所有 API 强制校验；
+        httpx AsyncClient 的 cookie jar 会自动保存并在后续请求带上（同一实例）。
+        fake_turing 的 ``/api/auth/login`` 永远成功且不设 Cookie、不校验，故无条件调用安全。
+        """
+        r = await self._client.post('/api/auth/login', json={'username': username, 'password': password})
+        r.raise_for_status()
+
     # ---- 元/健康 ----
     async def health(self) -> dict:
         r = await self._client.get("/health")

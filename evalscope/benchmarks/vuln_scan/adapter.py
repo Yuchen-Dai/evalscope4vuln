@@ -68,6 +68,9 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
     base_url = scan_cfg.get('turing_base_url') or vb_config.TURING_BASE_URL
     client = TuringClient(base_url=base_url)
     try:
+        # 鉴权（fake_turing 不校验；正式平台 set-cookie turing_session，httpx cookie jar 后续自动带）
+        await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
+        logger.info(f'[vuln_scan] 登录图灵（{base_url} 用户={vb_config.TURING_USERNAME}）')
         sc = _build_scan_config(scan_cfg)
         # 创建项目
         logger.info(f'[vuln_scan] → POST /projects/local  display_name="{project_name}" local_path="{sc.local_path}"')
@@ -144,14 +147,26 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
     def load_from_disk(self, **kwargs):
         return super().load_from_disk(use_local_loader=True)
 
+    @staticmethod
+    def _load_scan_config(task_config) -> Dict[str, Any]:
+        """从 work_dir/scan_config.json 读表单 scan_config（eval.py 写入）。
+
+        不能走 dataset_args[name]：加载 benchmark 时 BenchmarkMeta._update 会过滤掉
+        scan_config 这种非 meta 字段，导致表单填的 turing_base_url 等全部丢失。
+        """
+        work_dir = getattr(task_config, 'work_dir', '') or ''
+        try:
+            with open(os.path.join(work_dir, 'scan_config.json'), encoding='utf-8') as f:
+                return json.load(f) or {}
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+
     # record → Sample：扫描配置与 GT 路径都放 metadata
     def record_to_sample(self, record: Dict[str, Any]) -> Sample:
         meta = dict(record.get('metadata', {}) or {})
         tc = self._task_config
         if tc is not None:
-            # scan_config 透传 key 用本 benchmark 的 name（如 vuln_jeecgboot）
-            name = self._benchmark_meta.name
-            tc_scan = ((tc.dataset_args or {}).get(name, {}) or {}).get('scan_config', {}) or {}
+            tc_scan = self._load_scan_config(tc)
             # project_name 是运行时参数（用户每次提交指定，需唯一），从表单 scan_config 提到 metadata 顶层
             if tc_scan.get('project_name'):
                 meta['project_name'] = tc_scan['project_name']
