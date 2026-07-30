@@ -15,7 +15,7 @@ TURING_PASSWORD = os.environ.get("TURING_PASSWORD", "admin123")
 
 # ---- 轮询 ----
 POLL_INTERVAL = float(os.environ.get("VULNBENCH_POLL_INTERVAL", "2.5"))   # 轮询间隔（秒）
-POLL_TIMEOUT = float(os.environ.get("VULNBENCH_POLL_TIMEOUT", "1800"))    # 单个 run 总超时（秒）
+POLL_TIMEOUT = float(os.environ.get("VULNBENCH_POLL_TIMEOUT", "172800"))   # 单个 run 总超时（秒），默认 48h
 HTTP_TIMEOUT = float(os.environ.get("VULNBENCH_HTTP_TIMEOUT", "15"))      # 单次 HTTP 请求超时（秒）
 
 # ---- 匹配 ----

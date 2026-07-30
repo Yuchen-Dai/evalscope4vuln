@@ -47,7 +47,7 @@ export default function EvalConfigForm({ onSubmit, disabled, initialDataset }: P
   const [phase2Timeout, setPhase2Timeout] = useState('')
   const [phase3Timeout, setPhase3Timeout] = useState('')
   const [turingBaseUrl, setTuringBaseUrl] = useState(DEFAULT_TURING)
-  const [pollTimeout, setPollTimeout] = useState('120')
+  const [pollTimeout, setPollTimeout] = useState('172800')
 
   const { setErrors, errorFor: errMsg, clearError: clearErr } = useFormErrors()
 
