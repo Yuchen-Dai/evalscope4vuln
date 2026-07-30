@@ -96,6 +96,8 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         max_interval = 120.0  # 上限（避免退避太久）
         poll_count = 0
         prev_finding_count = -1
+        retry_count = 0
+        MAX_SCAN_RETRIES = 3
         while True:
             poll_count += 1
             await asyncio.sleep(interval)
@@ -107,12 +109,25 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
                     break
                 interval = min(interval * 1.5, max_interval)
                 continue
+            status_str = st.get('status', '?')
+            # 扫描 failed → 间隔 30s 重新 submit_scan，最多 MAX_SCAN_RETRIES 次，仍失败则终止任务
+            if status_str == 'failed':
+                retry_count += 1
+                if retry_count > MAX_SCAN_RETRIES:
+                    logger.error(f'[vuln_scan] 扫描 failed，已重试 {MAX_SCAN_RETRIES} 次仍失败，终止任务')
+                    raise RuntimeError(f'scan failed after {MAX_SCAN_RETRIES} retries')
+                logger.warning(f'[vuln_scan] 状态 failed（第 {retry_count}/{MAX_SCAN_RETRIES} 次），30s 后重新提交扫描')
+                await asyncio.sleep(30)
+                job_id = await client.submit_scan(pid, sc)
+                logger.info(f'[vuln_scan] 重新提交扫描 ← job_id={job_id}')
+                interval = 5.0
+                prev_finding_count = -1
+                continue
             # 每轮拉 report-overview 看增量 finding（写日志，前端 LogViewer 实时展示）
             try:
                 overview = await client.get_report_overview(pid, job_id)
                 cur_findings = overview.get('findings') or []
                 cur_count = len(cur_findings)
-                status_str = st.get('status', '?')
                 if cur_count != prev_finding_count:
                     # finding 数有变化（新增）→ 重置退避（可能正在密集产出）
                     logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
@@ -124,9 +139,9 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
                                 f'已发现 {cur_count} 个漏洞，无新增（状态: {status_str}）')
                     interval = min(interval * 1.5, max_interval)
             except Exception:
-                logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: 扫描中（状态: {st.get("status", "?")}）')
+                logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: 扫描中（状态: {status_str}）')
                 interval = min(interval * 1.5, max_interval)
-            if st.get('status') == 'completed':
+            if status_str == 'completed':
                 logger.info(f'[vuln_scan] 任务完成，共轮询 {poll_count} 轮')
                 break
             if time.time() > deadline:
