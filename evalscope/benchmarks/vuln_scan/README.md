@@ -74,7 +74,7 @@ vulnerabilities:
 
 ```
 [vuln_scan] 登录图灵（http://127.0.0.1:8088 用户=admin）
-[vuln_scan] → POST /projects/upload  filename="jeecgboot" source=".../jeecgboot.zip" version="1.0.0"
+[vuln_scan] → POST /projects/upload  display_name="<project_name>" filename="jeecgboot" source=".../jeecgboot.zip" version="1.0.0"
 [vuln_scan] ← project_id=xxx
 [vuln_scan] → POST /scan  platforms=web detect_types=22项 model_name=glm-5.1 ...
 [vuln_scan] ← job_id=xxx
@@ -87,7 +87,7 @@ vulnerabilities:
 
 `config.py` 配 base_url + 鉴权账号，`turing/client.py` 是唯一对接缝。已实现：
 - **鉴权**：`login`（POST /api/auth/login，`admin`/`admin123` 默认；环境变量 `TURING_USERNAME`/`TURING_PASSWORD` 覆盖；httpx cookie jar 自动带 `turing_session`）。注意环境变量须在 service **启动时**设置（config.py 仅启动时读一次）。
-- **建项目**：`upload_project`（POST /api/projects/upload，multipart：文件字段 `name=file`、`filename=<dataset 名>`、`version=1.0.0`；同 filename 重复返 409）。真实图灵是 server-side 扫描，代码经上传交付，不再用 `/projects/local`（其 `local_path` 在图灵服务器不存在会 400）。
+- **建项目**：`upload_project`（POST /api/projects/upload，multipart：文件字段 `name=file`/`filename=<源码文件名>`，外加 `display_name`+`version`）。`display_name` = project_name（用户每次填的唯一名），**重复判断依据 display_name+version**，故同 dataset 不同 project_name 不会重复；409 即项目已存在，按规则中断。真实图灵是 server-side 扫描，代码经上传交付，不再用 `/projects/local`（其 `local_path` 在图灵服务器不存在会 400）。
 
 待办（真实平台确认后改 client.py）：
 - 真实图灵 `POST /scan` 返 303 Redirect（mock 返 JSON），`submit_scan` 需处理重定向。

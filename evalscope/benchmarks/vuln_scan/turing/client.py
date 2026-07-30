@@ -114,18 +114,19 @@ class TuringClient:
         return r.json()
 
     # ---- 项目 ----
-    async def upload_project(self, filename: str, source_path: str,
+    async def upload_project(self, display_name: str, filename: str, source_path: str,
                              version: str = "1.0.0") -> str:
         """上传源码压缩包创建项目（POST /api/projects/upload，multipart）。
 
         真实图灵是 server-side 扫描：代码经上传交给图灵，不依赖图灵服务器本地路径
         （/projects/local 的 local_path 在服务器不存在会 400）。
-        multipart：文件字段 name=file、filename=<dataset 名>；外加 version。同 filename
-        重复上传返 409（项目已存在）。
+        multipart：文件字段 name=file、filename=<源码文件名>；外加 display_name（项目名，
+        重复判断依据）+ version。重复（display_name+version 已存在）返 409。
+        display_name 用 project_name（用户每次填的唯一名）→ 不会重复。
         """
         with open(source_path, "rb") as f:
             files = {"file": (filename, f)}
-            data = {"version": version}
+            data = {"display_name": display_name, "version": version}
             r = await self._client.post("/api/projects/upload", files=files, data=data)
         r.raise_for_status()
         return r.json().get("project_id") or config.FALLBACK_PROJECT_ID

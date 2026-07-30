@@ -73,12 +73,12 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         logger.info(f'[vuln_scan] 登录图灵（{base_url} 用户={vb_config.TURING_USERNAME}）')
         sc = _build_scan_config(scan_cfg)
         # 上传源码创建项目（真实图灵 server-side 扫描，代码经上传交付；local_path 在服务器不存在会 400）
-        logger.info(f'[vuln_scan] → POST /projects/upload  filename="{dataset_name}" source="{sc.source_path}" version="1.0.0"')
+        logger.info(f'[vuln_scan] → POST /projects/upload  display_name="{project_name}" filename="{dataset_name}" source="{sc.source_path}" version="1.0.0"')
         try:
-            pid = await client.upload_project(dataset_name, sc.source_path)
+            pid = await client.upload_project(project_name, dataset_name, sc.source_path)
         except Exception as e:
             if getattr(getattr(e, 'response', None), 'status_code', None) == 409:
-                logger.error(f'[vuln_scan] 项目 "{dataset_name}" 已存在（409 重复上传），按规则中断执行')
+                logger.error(f'[vuln_scan] 项目 "{project_name}" 已存在（409 重复上传），按规则中断执行')
             raise
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
