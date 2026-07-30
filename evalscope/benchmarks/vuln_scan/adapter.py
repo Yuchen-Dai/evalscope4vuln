@@ -97,7 +97,8 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         poll_count = 0
         prev_finding_count = -1
         retry_count = 0
-        MAX_SCAN_RETRIES = 3
+        MAX_SCAN_RETRIES = 10
+        RETRY_INTERVAL = 120
         while True:
             poll_count += 1
             await asyncio.sleep(interval)
@@ -116,8 +117,8 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
                 if retry_count > MAX_SCAN_RETRIES:
                     logger.error(f'[vuln_scan] 扫描 failed，已重试 {MAX_SCAN_RETRIES} 次仍失败，终止任务')
                     raise RuntimeError(f'scan failed after {MAX_SCAN_RETRIES} retries')
-                logger.warning(f'[vuln_scan] 状态 failed（第 {retry_count}/{MAX_SCAN_RETRIES} 次），30s 后重新提交扫描')
-                await asyncio.sleep(30)
+                logger.warning(f'[vuln_scan] 状态 failed（第 {retry_count}/{MAX_SCAN_RETRIES} 次），{RETRY_INTERVAL}s 后重新提交扫描')
+                await asyncio.sleep(RETRY_INTERVAL)
                 job_id = await client.submit_scan(pid, sc)
                 logger.info(f'[vuln_scan] 重新提交扫描 ← job_id={job_id}')
                 interval = 5.0
