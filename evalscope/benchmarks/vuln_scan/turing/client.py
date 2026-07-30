@@ -155,7 +155,7 @@ class TuringClient:
             "phase2_timeout": cfg.phase2_timeout,
             "phase3_timeout": cfg.phase3_timeout,
         }
-        r = await self._client.post(f"/api/projects/{project_id}/scan", data=form)
+        r = await self._client.post(f"/api/projects/{project_id}/scan-with-preprocess", data=form)
         # 真实图灵可能返 303 重定向，location: /scan/{pid}/status/{job_id}，job_id 在 url 末段
         if r.status_code in (301, 302, 303, 307, 308):
             return r.headers.get("location", "").rstrip("/").split("/")[-1] or ""

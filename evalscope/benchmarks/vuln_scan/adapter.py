@@ -83,7 +83,7 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
             raise
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
-        logger.info(f'[vuln_scan] → POST /scan  platforms={sc.platforms} '
+        logger.info(f'[vuln_scan] → POST /scan-with-preprocess  platforms={sc.platforms} '
                     f'detect_types={len(sc.detect_types.split(",")) if sc.detect_types else 0}项 '
                     f'priority={sc.priority} model_name={model_name or "(默认)"} '
                     f'max_concurrency={sc.max_concurrency or "(默认)"} '
