@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import httpx
@@ -113,13 +114,17 @@ class TuringClient:
         return r.json()
 
     # ---- 项目 ----
-    async def create_project(self, display_name: str, local_path: str,
+    async def upload_project(self, display_name: str, source_path: str,
                              version: str = "1.0.0") -> str:
-        r = await self._client.post("/api/projects/local", json={
-            "display_name": display_name,
-            "local_path": local_path,
-            "version": version,
-        })
+        """上传源码压缩包创建项目（POST /api/projects/upload，multipart）。
+
+        真实图灵是 server-side 扫描：代码经上传交给图灵，不依赖图灵服务器本地路径
+        （/projects/local 的 local_path 在服务器不存在会 400）。display_name 重复返 409。
+        """
+        with open(source_path, "rb") as f:
+            files = {"file": (os.path.basename(source_path), f)}
+            data = {"display_name": display_name, "version": version}
+            r = await self._client.post("/api/projects/upload", files=files, data=data)
         r.raise_for_status()
         return r.json().get("project_id") or config.FALLBACK_PROJECT_ID
 

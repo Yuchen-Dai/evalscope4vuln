@@ -45,7 +45,7 @@ def _run_async(coro):
 def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
     return ScanConfig(
         display_name=scan_cfg.get('display_name', 'vulnbench-target'),
-        local_path=scan_cfg.get('local_path', '/tmp/vulnbench-target'),
+        source_path=scan_cfg.get('source_path', ''),
         platforms=scan_cfg.get('platforms', 'web'),
         detect_types=scan_cfg.get('detect_types', ''),
         priority=str(scan_cfg.get('priority', '100')),
@@ -72,9 +72,9 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
         logger.info(f'[vuln_scan] 登录图灵（{base_url} 用户={vb_config.TURING_USERNAME}）')
         sc = _build_scan_config(scan_cfg)
-        # 创建项目
-        logger.info(f'[vuln_scan] → POST /projects/local  display_name="{project_name}" local_path="{sc.local_path}"')
-        pid = await client.create_project(project_name, sc.local_path)
+        # 上传源码创建项目（真实图灵 server-side 扫描，代码经上传交付；local_path 在服务器不存在会 400）
+        logger.info(f'[vuln_scan] → POST /projects/upload  display_name="{project_name}" source="{sc.source_path}"')
+        pid = await client.upload_project(project_name, sc.source_path)
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
         logger.info(f'[vuln_scan] → POST /scan  platforms={sc.platforms} '
