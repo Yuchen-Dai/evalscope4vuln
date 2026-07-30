@@ -91,7 +91,8 @@ class TuringClient:
         # 真实图灵平台若需走代理，改这里即可（唯一对接缝）。
         self._client = httpx.AsyncClient(base_url=self.base_url,
                                          timeout=timeout or config.HTTP_TIMEOUT,
-                                         trust_env=False)
+                                         trust_env=False,
+                                         headers={"X-Requested-With": "XMLHttpRequest"})
 
     async def aclose(self) -> None:
         await self._client.aclose()
