@@ -57,7 +57,7 @@ def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
     )
 
 
-async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: str = '') -> List[Dict[str, Any]]:
+async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: str = '', dataset_name: str = '') -> List[Dict[str, Any]]:
     """提交图灵扫描 → 轮询到完成 → 返回完整 finding 列表（原始 dict）。
 
     轮询采用指数退避（初始 5s，每轮 ×1.5，上限 120s），适配数小时的长任务。
@@ -73,8 +73,13 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         logger.info(f'[vuln_scan] 登录图灵（{base_url} 用户={vb_config.TURING_USERNAME}）')
         sc = _build_scan_config(scan_cfg)
         # 上传源码创建项目（真实图灵 server-side 扫描，代码经上传交付；local_path 在服务器不存在会 400）
-        logger.info(f'[vuln_scan] → POST /projects/upload  display_name="{project_name}" source="{sc.source_path}"')
-        pid = await client.upload_project(project_name, sc.source_path)
+        logger.info(f'[vuln_scan] → POST /projects/upload  filename="{dataset_name}" source="{sc.source_path}" version="1.0.0"')
+        try:
+            pid = await client.upload_project(dataset_name, sc.source_path)
+        except Exception as e:
+            if getattr(getattr(e, 'response', None), 'status_code', None) == 409:
+                logger.error(f'[vuln_scan] 项目 "{dataset_name}" 已存在（409 重复上传），按规则中断执行')
+            raise
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
         logger.info(f'[vuln_scan] → POST /scan  platforms={sc.platforms} '
@@ -186,7 +191,12 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         project_name = (sample.metadata or {}).get('project_name', 'unknown')
         model_name = scan_cfg.get('model_name') or model.name or '(默认)'
         logger.info(f'[vuln_scan] 开始扫描 {project_name}（模型: {model_name}）...')
-        raw_findings = _run_async(_scan_async(scan_cfg, project_name, model_name))
+        dataset_name = os.path.basename(self._benchmark_meta.dataset_id)
+        # source_path 相对 benchmark dataset 目录解析（部署无关；绝对路径直用）
+        sp = scan_cfg.get('source_path', '')
+        if sp and not os.path.isabs(sp):
+            scan_cfg = {**scan_cfg, 'source_path': os.path.join(self._benchmark_meta.dataset_id, sp)}
+        raw_findings = _run_async(_scan_async(scan_cfg, project_name, model_name, dataset_name))
         logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)}')
 
         model_output = ModelOutput.from_content(
