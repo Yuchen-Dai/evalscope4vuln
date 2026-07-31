@@ -178,6 +178,8 @@ class TuringClient:
             "phase1_timeout": cfg.phase1_timeout,
             "phase2_timeout": cfg.phase2_timeout,
             "phase3_timeout": cfg.phase3_timeout,
+            "selected_target": [],
+            "target_packages": [],
         }
         r = await self._client.post(f"/api/projects/{project_id}/scan-with-preprocess", data=form)
         # 真实图灵可能返 303 重定向，location: /scan/{pid}/status/{job_id}，job_id 在 url 末段
