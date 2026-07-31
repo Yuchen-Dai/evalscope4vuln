@@ -106,8 +106,8 @@ class ScanConfig(BaseModel):
     """配置驱动的扫描参数（对应流程第 2 步的 6 个字段）。"""
     display_name: str = "vulnbench-target"
     source_path: str = ""                  # 源码压缩包绝对路径（上传给图灵，server-side 扫描）
-    platforms: str = "web"                 # 逗号分隔，对应图灵 platforms
-    detect_types: str = ""                 # 逗号分隔，用 detect-types 的 value
+    platforms: list[str] = Field(default_factory=lambda: ["web"])   # 平台数组
+    detect_types: list[str] = Field(default_factory=list)           # 探测类型 value 数组（submit_scan 动态填充）
     priority: str = "100"
     model_name: str = ""
     max_concurrency: str = ""

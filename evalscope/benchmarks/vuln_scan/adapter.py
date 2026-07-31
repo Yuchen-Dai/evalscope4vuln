@@ -42,12 +42,21 @@ def _run_async(coro):
         return asyncio.run(coro)
 
 
+def _to_str_list(v: Any) -> list[str]:
+    """把 str（逗号分隔）/list 统一成去空白的 str 列表。"""
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if isinstance(v, str):
+        return [x.strip() for x in v.split(',') if x.strip()]
+    return []
+
+
 def _build_scan_config(scan_cfg: Dict[str, Any]) -> ScanConfig:
     return ScanConfig(
         display_name=scan_cfg.get('display_name', 'vulnbench-target'),
         source_path=scan_cfg.get('source_path', ''),
-        platforms=scan_cfg.get('platforms', 'web'),
-        detect_types=scan_cfg.get('detect_types', ''),
+        platforms=_to_str_list(scan_cfg.get('platforms', 'web')) or ['web'],
+        detect_types=_to_str_list(scan_cfg.get('detect_types', [])),
         priority=str(scan_cfg.get('priority', '100')),
         model_name=scan_cfg.get('model_name', ''),
         max_concurrency=str(scan_cfg.get('max_concurrency', '')),
@@ -83,8 +92,7 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
             raise
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
-        logger.info(f'[vuln_scan] → POST /scan-with-preprocess  platforms={sc.platforms} '
-                    f'detect_types={len(sc.detect_types.split(",")) if sc.detect_types else 0}项 '
+        logger.info(f'[vuln_scan] → POST /scan-with-preprocess  platforms={",".join(sc.platforms)} '
                     f'priority={sc.priority} model_name={model_name or "(默认)"} '
                     f'max_concurrency={sc.max_concurrency or "(默认)"} '
                     f'phase_timeout=({sc.phase1_timeout or "-"}/{sc.phase2_timeout or "-"}/{sc.phase3_timeout or "-"})')

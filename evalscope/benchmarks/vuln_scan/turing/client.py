@@ -147,12 +147,12 @@ class TuringClient:
         r.raise_for_status()
         return r.json()
 
-    async def _resolve_detect_types(self, platforms: str) -> str:
-        """按 platform 调 detect-types API，收集全部 value 拼接（替代写死的 cfg.detect_types）。
-        支持逗号分隔多 platform（如 'web,rust'）；单 platform 失败则跳过并告警。"""
+    async def _resolve_detect_types(self, platforms: list[str]) -> list[str]:
+        """按 platform 调 detect-types API，收集全部 value（去重保序）。
+        支持多 platform；单 platform 失败则跳过并告警。"""
         values: list[str] = []
         seen: set[str] = set()
-        for p in [x.strip() for x in (platforms or '').split(',') if x.strip()]:
+        for p in platforms or []:
             try:
                 items = await self.list_detect_types(p)
             except Exception as e:
@@ -164,14 +164,14 @@ class TuringClient:
                     seen.add(v)
                     values.append(v)
         logger.info(f'[vuln_scan] 解析 detect-types: {len(values)} 项 (platforms={platforms})')
-        return ','.join(values)
+        return values
 
     # ---- 扫描（Form body）----
     async def submit_scan(self, project_id: str, cfg: ScanConfig) -> str:
         detect_types = await self._resolve_detect_types(cfg.platforms)
         form = {
-            "platforms": cfg.platforms,
-            "detect_types": detect_types,
+            "platforms": ",".join(cfg.platforms),
+            "detect_types": ",".join(detect_types),
             "priority": cfg.priority,
             "model_name": cfg.model_name,
             "max_concurrency": cfg.max_concurrency,
