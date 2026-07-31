@@ -170,8 +170,8 @@ class TuringClient:
     async def submit_scan(self, project_id: str, cfg: ScanConfig) -> str:
         detect_types = await self._resolve_detect_types(cfg.platforms)
         form = {
-            "platforms": ",".join(cfg.platforms),
-            "detect_types": ",".join(detect_types),
+            "platforms": cfg.platforms,
+            "detect_types": detect_types,
             "priority": cfg.priority,
             "model_name": cfg.model_name,
             "max_concurrency": cfg.max_concurrency,
