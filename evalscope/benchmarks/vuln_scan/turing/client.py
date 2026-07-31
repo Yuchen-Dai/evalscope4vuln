@@ -16,9 +16,13 @@ from typing import Any
 
 import httpx
 
+from evalscope.utils.logger import get_logger
+
 from evalscope.benchmarks.vuln_scan import config
 from evalscope.benchmarks.vuln_scan.schemas import Finding, Loc, ScanConfig
 from evalscope.benchmarks.vuln_scan.scoring.type_map import normalize
+
+logger = get_logger()
 
 
 def _as_json(value: Any) -> Any:
@@ -143,11 +147,31 @@ class TuringClient:
         r.raise_for_status()
         return r.json()
 
+    async def _resolve_detect_types(self, platforms: str) -> str:
+        """按 platform 调 detect-types API，收集全部 value 拼接（替代写死的 cfg.detect_types）。
+        支持逗号分隔多 platform（如 'web,rust'）；单 platform 失败则跳过并告警。"""
+        values: list[str] = []
+        seen: set[str] = set()
+        for p in [x.strip() for x in (platforms or '').split(',') if x.strip()]:
+            try:
+                items = await self.list_detect_types(p)
+            except Exception as e:
+                logger.warning(f'[vuln_scan] 获取 {p} 的 detect-types 失败，跳过: {e}')
+                continue
+            for it in items:
+                v = it.get('value')
+                if v and v not in seen:
+                    seen.add(v)
+                    values.append(v)
+        logger.info(f'[vuln_scan] 解析 detect-types: {len(values)} 项 (platforms={platforms})')
+        return ','.join(values)
+
     # ---- 扫描（Form body）----
     async def submit_scan(self, project_id: str, cfg: ScanConfig) -> str:
+        detect_types = await self._resolve_detect_types(cfg.platforms)
         form = {
             "platforms": cfg.platforms,
-            "detect_types": cfg.detect_types,
+            "detect_types": detect_types,
             "priority": cfg.priority,
             "model_name": cfg.model_name,
             "max_concurrency": cfg.max_concurrency,
