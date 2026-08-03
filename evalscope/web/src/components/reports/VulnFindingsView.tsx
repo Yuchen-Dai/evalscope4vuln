@@ -98,7 +98,7 @@ export default function VulnFindingsView({ predictions }: Props) {
           <select
             value={scanIdx}
             onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }}
-            className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)]"
+            className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
           >
             {vulnPreds.map((p, i) => <option key={i} value={i}>扫描 #{p.Index}</option>)}
           </select>
@@ -108,7 +108,7 @@ export default function VulnFindingsView({ predictions }: Props) {
             <button
               key={v}
               onClick={() => { setView(v); setSelGt(null); setSelFinding(null) }}
-              className={`px-3 py-1 ${view === v ? 'bg-[var(--accent)] text-[var(--bg)]' : 'bg-[var(--bg-card2)] text-[var(--text-muted)]'}`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${view === v ? 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90' : 'bg-[var(--bg-card2)] text-[var(--text-muted)] hover:bg-[var(--bg-deep)] hover:text-[var(--text)]'}`}
             >{v === 'gt' ? '按 GT' : '按 Finding'}</button>
           ))}
         </div>
@@ -117,14 +117,14 @@ export default function VulnFindingsView({ predictions }: Props) {
             <button
               key={k}
               onClick={() => setFilter(k)}
-              className={`px-3 py-1 ${filter === k ? 'bg-[var(--accent)] text-[var(--bg)]' : 'bg-[var(--bg-card2)] text-[var(--text-muted)]'}`}
+              className={`px-3 py-1 transition-colors cursor-pointer ${filter === k ? 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90' : 'bg-[var(--bg-card2)] text-[var(--text-muted)] hover:bg-[var(--bg-deep)] hover:text-[var(--text)]'}`}
             >{k === 'all' ? '全部' : k}</button>
           ))}
         </div>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)]"
+          className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
         >
           <option value="">所有类型</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
@@ -141,7 +141,7 @@ export default function VulnFindingsView({ predictions }: Props) {
               <button
                 key={g.gt_id}
                 onClick={() => { setSelGt(g.gt_id); setSelFinding(null); setShowRaw(false) }}
-                className={`w-full text-left px-3 py-2 border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-card2)] ${selGt === g.gt_id ? 'bg-[var(--bg-card2)]' : ''}`}
+                className={`w-full text-left px-3 py-2 border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-deep)] cursor-pointer transition-colors ${selGt === g.gt_id ? 'bg-[var(--bg-card2)]' : ''}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium truncate">{g.gt_id}</span>
@@ -159,7 +159,7 @@ export default function VulnFindingsView({ predictions }: Props) {
                 <button
                   key={it.finding_id}
                   onClick={() => { setSelFinding(it.finding_id ?? null); setSelGt(null); setShowRaw(false) }}
-                  className={`w-full text-left px-3 py-2 border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-card2)] ${selFinding === it.finding_id ? 'bg-[var(--bg-card2)]' : ''}`}
+                  className={`w-full text-left px-3 py-2 border-b border-[var(--border)] last:border-b-0 hover:bg-[var(--bg-deep)] cursor-pointer transition-colors ${selFinding === it.finding_id ? 'bg-[var(--bg-card2)]' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-[var(--text-muted)] truncate">{it.display_id || it.finding_id}</span>
