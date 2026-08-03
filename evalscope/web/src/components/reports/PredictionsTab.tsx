@@ -9,6 +9,7 @@ import Select from '@/components/ui/Select'
 import ChatView from '@/components/single/ChatView'
 import Skeleton from '@/components/ui/Skeleton'
 import EmptyStateSystem from '@/components/common/EmptyStateSystem'
+import VulnFindingsView from './VulnFindingsView'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 
 interface Props {
@@ -180,6 +181,19 @@ export default function PredictionsTab({ reportName, datasetName, rootPath, init
 
   const navBtnBase = 'bg-transparent border border-[var(--border)] rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--text)] transition-colors'
   const searchInputBase = 'pl-7 pr-2 py-[0.3rem] text-[0.8rem] w-[120px] bg-[var(--bg-deep)] rounded-[var(--radius-sm)] text-[var(--text)] outline-none transition-colors'
+
+  // vuln benchmark：按漏洞（GT↔finding）维度浏览，替代 sample 翻页
+  const isVuln = datasetName.startsWith('vuln_') && predictions.some((p) => p.Findings)
+  if (isVuln && !loading) {
+    return (
+      <div className="flex flex-col gap-3">
+        {loadError && <ErrorAlert>{loadError}</ErrorAlert>}
+        {predictions.length > 0
+          ? <VulnFindingsView predictions={predictions} />
+          : <EmptyStateSystem reason="no-data" context={{ view: 'evaluations' }} />}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-3">

@@ -278,4 +278,14 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             f'findings={len(findings)} gt={len(gt_vulns)} '
             f'TP={snap.tp} FP={snap.fp} FN={snap.fn} '
             f'P={snap.precision:.3f} R={snap.recall:.3f} Cov={snap.coverage:.3f}')
+        # 匹配明细落 score.metadata（不被指标聚合，随 review 缓存传给前端 predictions 漏洞视图）
+        score.metadata = {'vuln_match': {
+            'schema': 1,
+            'gt': [g.model_dump() for g in gt_vulns],
+            'matches': [m.model_dump() for m in mr.matches],
+            'classifications': dict(mr.classifications),
+            'missed_gt': list(mr.missed_gt),
+            'summary': {'tp': snap.tp, 'fp': snap.fp, 'fn': snap.fn,
+                        'findings_total': len(findings), 'gt_total': len(gt_vulns)},
+        }}
         return score

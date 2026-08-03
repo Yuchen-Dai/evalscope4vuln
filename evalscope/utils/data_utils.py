@@ -4,7 +4,7 @@ Data loading and processing utilities for reports and predictions.
 import glob
 import os
 import pandas as pd
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 from evalscope.api.evaluator import CacheManager, ReviewResult
 from evalscope.constants import DATASET_TOKEN, MODEL_TOKEN, REPORT_TOKEN, DataCollection
@@ -170,6 +170,29 @@ def _load_perf_map(cache_manager: CacheManager, dataset_name: str, subset_name: 
     return perf_map
 
 
+def _load_findings_raw_map(cache_manager: CacheManager, dataset_name: str, subset_name: str) -> Dict[int, List[Dict[str, Any]]]:
+    """Build an index -> findings_raw mapping from the prediction cache.
+
+    vuln_scan 把图灵扫描的全部 finding 塞进 model_output.metadata.findings_raw。
+    本 map 供 predictions API join 出 Findings 字段（按 finding_id 与匹配结果合并）。
+    非 vuln 缓存无 findings_raw，返回空 dict。
+    """
+    fmap: Dict[int, List[Dict[str, Any]]] = {}
+    try:
+        pred_subset = 'default' if dataset_name == DataCollection.NAME else subset_name
+        pred_cache_path = cache_manager.get_prediction_cache_path(pred_subset)
+        if os.path.exists(pred_cache_path):
+            for item in jsonl_to_list(pred_cache_path):
+                idx = item.get('index')
+                mo = item.get('model_output') or {}
+                fr = (mo.get('metadata') or {}).get('findings_raw')
+                if fr and idx is not None:
+                    fmap[int(idx)] = fr
+    except Exception as e:
+        logger.debug(f'Could not load findings_raw from prediction cache: {e}')
+    return fmap
+
+
 def _serialize_messages(review_result: ReviewResult) -> List[Dict[str, Any]]:
     """Serialize a ReviewResult's message list into frontend-compatible dicts.
 
@@ -291,6 +314,7 @@ def _build_prediction_row(
     review_result: ReviewResult,
     fallback_perf: Any,
     messages_data: List[Dict[str, Any]],
+    findings_raw: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Assemble a single prediction row dict from a ReviewResult.
 
@@ -303,7 +327,7 @@ def _build_prediction_row(
     prediction = score.prediction
     extracted_prediction = score.extracted_prediction
 
-    return {
+    row = {
         'Index': str(review_result.index),
         'Input': review_result.messages_markdown.replace('\n', '\n\n'),  # for markdown
         'Metadata': sample_score.sample_metadata,
@@ -317,6 +341,48 @@ def _build_prediction_row(
         'Messages': messages_data,
         'AgentTrace': review_result.agent_trace.model_dump(exclude_none=True) if review_result.agent_trace else None,
     }
+
+    # vuln_scan: join findings_raw + score.metadata.vuln_match → Findings（GT↔finding 浏览）
+    vm = (score.metadata or {}).get('vuln_match')
+    if vm and findings_raw:
+        class_map = vm.get('classifications', {})
+        gt_by_finding = {m.get('finding_id'): m.get('gt_id') for m in vm.get('matches', [])}
+        findings_out = []
+        for fr in findings_raw:
+            fid = fr.get('id') or fr.get('finding_id')
+            findings_out.append({
+                'finding_id': fid,
+                'display_id': fr.get('display_id'),
+                'vuln_type': fr.get('vuln_type'),
+                'severity': fr.get('severity'),
+                'confidence': fr.get('confidence'),
+                'validation_result': fr.get('validation_result'),
+                'title': fr.get('title'),
+                'description': fr.get('description'),
+                'source': fr.get('source'),
+                'sink': fr.get('sink'),
+                'call_chain': fr.get('call_chain'),
+                'classification': class_map.get(fid, 'FP'),
+                'gt_id': gt_by_finding.get(fid),
+                'raw': fr,
+            })
+        matched_by_gt: Dict[str, List[str]] = {}
+        for m in vm.get('matches', []):
+            matched_by_gt.setdefault(m.get('gt_id'), []).append(m.get('finding_id'))
+        missed = set(vm.get('missed_gt', []))
+        gt_out = []
+        for g in vm.get('gt', []):
+            gid = g.get('gt_id')
+            gt_out.append({**g, 'matched_finding_ids': matched_by_gt.get(gid, []), 'missed': gid in missed})
+        row['Findings'] = {
+            'scan': {'findings_count': len(findings_raw)},
+            'gt': gt_out,
+            'findings': findings_out,
+            'missed_gt': vm.get('missed_gt', []),
+            'summary': vm.get('summary', {}),
+        }
+
+    return row
 
 
 def get_model_prediction(work_dir: str, model_name: str, dataset_name: str, subset_name: str):
@@ -336,6 +402,8 @@ def get_model_prediction(work_dir: str, model_name: str, dataset_name: str, subs
 
     # Build index -> perf_metrics fallback map from the prediction cache
     perf_map = _load_perf_map(cache_manager, dataset_name, subset_name)
+    # Build index -> findings_raw map (vuln_scan only; empty for other benchmarks)
+    findings_map = _load_findings_raw_map(cache_manager, dataset_name, subset_name)
 
     ds = []
     for cache in review_caches:
@@ -356,11 +424,14 @@ def get_model_prediction(work_dir: str, model_name: str, dataset_name: str, subs
         # Resolve per-sample fallback perf from the prediction-level cache
         fallback_perf = perf_map.get(int(review_result.index))
 
+        # Resolve per-sample findings_raw (vuln_scan only)
+        sample_findings_raw = findings_map.get(int(review_result.index))
+
         # Apply legacy-compatibility fixes for perf and missing assistant turns
         prediction = sample_score.score.prediction
         messages_data = _apply_legacy_perf_compat(messages_data, fallback_perf, prediction)
 
-        ds.append(_build_prediction_row(review_result, fallback_perf, messages_data))
+        ds.append(_build_prediction_row(review_result, fallback_perf, messages_data, sample_findings_raw))
 
     return pd.DataFrame(ds)
 

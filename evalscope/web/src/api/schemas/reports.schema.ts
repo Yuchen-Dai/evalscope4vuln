@@ -220,6 +220,47 @@ export const agentTraceSchema = z.object({
   events: z.array(agentTraceEventSchema),
 })
 
+/** vuln_scan: 漏洞浏览视图（GT↔finding 匹配详情）。仅 vuln benchmark 的 PredictionRow 有 Findings。 */
+const vulnLocationSchema = z.object({
+  file: z.string().nullable().optional(),
+  line: z.number().nullable().optional(),
+  line_range: z.array(z.number()).nullable().optional(),
+  function: z.string().nullable().optional(),
+}).passthrough()
+
+const vulnGtSchema = z.object({
+  gt_id: z.string(),
+  vuln_type: z.string().nullable().optional(),
+  cwe: z.string().nullable().optional(),
+  severity: z.string().nullable().optional(),
+  location: vulnLocationSchema.nullable().optional(),
+  description: z.string().nullable().optional(),
+  matched_finding_ids: z.array(z.string()).optional(),
+  missed: z.boolean().optional(),
+}).passthrough()
+
+const vulnFindingSchema = z.object({
+  finding_id: z.string().nullable().optional(),
+  display_id: z.string().nullable().optional(),
+  vuln_type: z.string().nullable().optional(),
+  severity: z.string().nullable().optional(),
+  confidence: z.number().nullable().optional(),
+  validation_result: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  classification: z.enum(['TP', 'FP']).nullable().optional(),
+  gt_id: z.string().nullable().optional(),
+  raw: z.record(z.string(), z.unknown()).nullable().optional(),
+}).passthrough()
+
+const vulnFindingsSchema = z.object({
+  scan: z.object({ findings_count: z.number() }).passthrough(),
+  gt: z.array(vulnGtSchema),
+  findings: z.array(vulnFindingSchema),
+  missed_gt: z.array(z.string()),
+  summary: z.record(z.string(), z.unknown()),
+}).passthrough()
+
 /** Mirrors `PredictionRow`. */
 export const predictionRowSchema = z.object({
   Index: z.string(),
@@ -233,6 +274,7 @@ export const predictionRowSchema = z.object({
   PerfMetrics: samplePerfMetricsSchema.nullable().optional(),
   Messages: z.array(chatMessageSchema).nullable().optional(),
   AgentTrace: agentTraceSchema.nullable().optional(),
+  Findings: vulnFindingsSchema.nullable().optional(),
 })
 
 /** Mirrors `PredictionsResponse`. */
