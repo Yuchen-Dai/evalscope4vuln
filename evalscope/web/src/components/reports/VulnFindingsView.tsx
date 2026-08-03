@@ -1,9 +1,10 @@
 /**
  * vuln_scan 漏洞浏览视图：按 GT 或 Finding 维度浏览，查看 GT↔finding 匹配关系 +
- * 图灵返回的漏洞详情。支持两套评分对照（类型+位置 / 仅位置）。
+ * 图灵返回的漏洞详情。顶部「评分方式」selector 切换 类型+位置 / 仅位置 两套评分，
+ * 选中后 summary/列表/详情都按该套展示。
  *
  * 数据来自 PredictionRow.Findings（后端 join findings_raw + score.metadata.vuln_match）。
- * f.type = 类型+位置(A)，f.loc = 仅位置(B，老报告无则隐藏 toggle/B 列)。
+ * f.type = 类型+位置，f.loc = 仅位置（老报告无 loc 则隐藏 selector、回退 type）。
  */
 import { useMemo, useState, type ReactNode } from 'react'
 import type { PredictionRow } from '@/api/types'
@@ -38,10 +39,10 @@ export default function VulnFindingsView({ predictions }: Props) {
   const current = vulnPreds[Math.min(scanIdx, vulnPreds.length - 1)]
   const f = current?.Findings
   const hasLoc = !!f?.loc
-  const sumA = (f?.type?.summary || f?.summary || {}) as Record<string, number>
-  const sumB = (f?.loc?.summary || {}) as Record<string, number>
+  // 当前 regime 的 summary（loc 缺失回退 type）
+  const summary = (regime === 'loc' && f?.loc?.summary ? f.loc.summary : (f?.type?.summary || f?.summary || {})) as Record<string, number>
 
-  // 按 regime 取分类/命中（loc 缺失回退 type 字段）
+  // 按 regime 取分类/命中（loc 字段缺失回退 type 字段）
   const classOf = (it: { classification?: string | null; classification_loc?: string | null }) =>
     regime === 'type' ? (it.classification ?? 'FP') : (it.classification_loc ?? it.classification ?? 'FP')
   const gtHitsOf = (g: { matched_finding_ids?: string[]; matched_finding_ids_loc?: string[] }) =>
@@ -85,62 +86,42 @@ export default function VulnFindingsView({ predictions }: Props) {
   const selGtObj = f.gt.find((g) => g.gt_id === selGt)
   const selFindingObj = f.findings.find((it) => it.finding_id === selFinding)
   const sevColor = (s?: string | null) => (s ? SEV_COLOR[s.toUpperCase()] || 'var(--text-muted)' : 'var(--text-muted)')
+  const pct = (k: string) => ((summary[k] ?? 0) * 100).toFixed(1) + '%'
 
-  const MetricRow = ({ label, keyName, fmt }: { label: string; keyName: string; fmt?: (v: number) => string }) => {
-    const a = sumA[keyName]
-    const b = hasLoc ? sumB[keyName] : undefined
-    const fmtV = fmt || ((v: number) => String(v))
-    const diff = hasLoc && typeof a === 'number' && typeof b === 'number' && a !== b
-    return (
-      <div className="grid grid-cols-3 gap-2 px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card2)] border border-[var(--border)] text-xs items-center">
-        <span className="text-[var(--text-muted)]">{label}</span>
-        <span className={`font-mono text-center ${diff ? 'text-[var(--accent)]' : ''}`}>{typeof a === 'number' ? fmtV(a) : '-'}</span>
-        <span className={`font-mono text-center ${diff ? 'text-[var(--accent)]' : ''}`}>{hasLoc && typeof b === 'number' ? fmtV(b) : '-'}</span>
-      </div>
-    )
-  }
-  const pct = (v: number) => (v * 100).toFixed(1) + '%'
+  const Chip = ({ label, value, color }: { label: string; value: ReactNode; color?: string }) => (
+    <div className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card2)] border border-[var(--border)] text-xs">
+      <span className="text-[var(--text-muted)]">{label} </span>
+      <span className="font-mono font-medium" style={color ? { color } : undefined}>{value}</span>
+    </div>
+  )
+  const selectClass = "px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
 
   return (
     <div className="flex flex-col gap-3">
-      {/* summary A/B 两列对照（差异高亮） */}
-      <div className="flex flex-col gap-1 max-w-[380px]">
-        <div className="grid grid-cols-3 gap-2 text-[11px] text-[var(--text-muted)] px-3">
-          <span></span>
-          <span className="text-center">类型+位置</span>
-          <span className="text-center">{hasLoc ? '仅位置' : '（无 B 套）'}</span>
-        </div>
-        <MetricRow label="GT" keyName="gt_total" />
-        <MetricRow label="findings" keyName="findings_total" />
-        <MetricRow label="TP" keyName="tp" />
-        <MetricRow label="FP" keyName="fp" />
-        <MetricRow label="FN" keyName="fn" />
-        <MetricRow label="Precision" keyName="precision" fmt={pct} />
-        <MetricRow label="Recall" keyName="recall" fmt={pct} />
-        <MetricRow label="F1" keyName="f1" fmt={pct} />
+      {/* summary chips（当前 regime） */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip label="GT" value={summary.gt_total ?? f.gt.length} />
+        <Chip label="findings" value={summary.findings_total ?? f.findings.length} />
+        <Chip label="TP" value={summary.tp ?? 0} color="var(--accent)" />
+        <Chip label="FP" value={summary.fp ?? 0} color="#e8590c" />
+        <Chip label="FN" value={summary.fn ?? 0} color="var(--danger)" />
+        <Chip label="P" value={pct('precision')} />
+        <Chip label="R" value={pct('recall')} />
+        <Chip label="F1" value={pct('f1')} />
       </div>
 
-      {/* scan / regime toggle / view / filter / type */}
+      {/* scan / 评分方式 / view / filter / type */}
       <div className="flex flex-wrap items-center gap-2">
         {vulnPreds.length > 1 && (
-          <select
-            value={scanIdx}
-            onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }}
-            className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
-          >
+          <select value={scanIdx} onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }} className={selectClass}>
             {vulnPreds.map((p, i) => <option key={i} value={i}>扫描 #{p.Index}</option>)}
           </select>
         )}
         {hasLoc && (
-          <div className="inline-flex rounded-[var(--radius)] border border-[var(--border-md)] overflow-hidden text-sm">
-            {(['type', 'loc'] as Regime[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRegime(r)}
-                className={`px-3 py-1 transition-colors cursor-pointer ${regime === r ? 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90' : 'bg-[var(--bg-card2)] text-[var(--text-muted)] hover:bg-[var(--bg-deep)] hover:text-[var(--text)]'}`}
-              >{r === 'type' ? '类型+位置' : '仅位置'}</button>
-            ))}
-          </div>
+          <select value={regime} onChange={(e) => setRegime(e.target.value as Regime)} className={selectClass} aria-label="评分方式">
+            <option value="type">评分方式：类型+位置</option>
+            <option value="loc">评分方式：仅位置</option>
+          </select>
         )}
         <div className="inline-flex rounded-[var(--radius)] border border-[var(--border-md)] overflow-hidden text-sm">
           {(['gt', 'finding'] as ViewMode[]).map((v) => (
@@ -160,11 +141,7 @@ export default function VulnFindingsView({ predictions }: Props) {
             >{k === 'all' ? '全部' : k}</button>
           ))}
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
-        >
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass}>
           <option value="">所有类型</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
         </select>
