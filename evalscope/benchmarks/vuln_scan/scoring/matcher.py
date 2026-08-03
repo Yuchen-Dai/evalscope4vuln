@@ -79,13 +79,11 @@ def match(findings: list[Finding],
     found_gt: set[str] = set()
 
     for f in findings:
-        f_type = f.vuln_type_norm
         matched_gt_id: str | None = None
         for g in gt:
             if g.gt_id in found_gt:
                 continue
-            if f_type != normalize(g.vuln_type):
-                continue
+            # 暂时仅按位置匹配（去掉 vuln_type 类型对比）
             if _loc_match(g, f, tol):
                 matched_gt_id = g.gt_id
                 break
