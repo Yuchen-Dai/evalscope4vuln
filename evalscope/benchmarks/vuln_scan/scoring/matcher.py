@@ -68,7 +68,8 @@ def _loc_match(gt: GtVuln, finding: Finding, tol: int) -> bool:
 
 def match(findings: list[Finding],
           gt: list[GtVuln],
-          line_tolerance: int | None = None) -> MatchResult:
+          line_tolerance: int | None = None,
+          use_type: bool = True) -> MatchResult:
     """对全量 findings 与 GT 做匹配（无状态，每轮可重算）。
 
     Returns:
@@ -83,13 +84,15 @@ def match(findings: list[Finding],
         for g in gt:
             if g.gt_id in found_gt:
                 continue
-            # 暂时仅按位置匹配（去掉 vuln_type 类型对比）
+            if use_type and f.vuln_type_norm != normalize(g.vuln_type):
+                continue
             if _loc_match(g, f, tol):
                 matched_gt_id = g.gt_id
                 break
         if matched_gt_id:
             found_gt.add(matched_gt_id)
-            result.matches.append(Match(finding_id=f.finding_id, gt_id=matched_gt_id))
+            result.matches.append(Match(finding_id=f.finding_id, gt_id=matched_gt_id,
+                                        by='type+location' if use_type else 'location'))
             result.classifications[f.finding_id] = "TP"
         else:
             result.unmatched_findings.append(f.finding_id)

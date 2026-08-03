@@ -20,7 +20,7 @@ from evalscope.benchmarks.vuln_scan.turing.client import TuringClient, parse_fin
 from evalscope.benchmarks.vuln_scan.scoring.matcher import match as do_match
 from evalscope.benchmarks.vuln_scan.scoring.metrics import compute_metrics
 from evalscope.benchmarks.vuln_scan.dataset.adapter import load_gt
-from evalscope.benchmarks.vuln_scan.schemas import ScanConfig
+from evalscope.benchmarks.vuln_scan.schemas import MatchResult, MetricsSnapshot, ScanConfig
 
 logger = get_logger()
 
@@ -250,8 +250,12 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         gt_path = os.path.join(self._benchmark_meta.dataset_id, 'gt.yaml')
         gt_vulns = load_gt(gt_path).vulnerabilities
 
-        mr = do_match(findings, gt_vulns)
-        snap = compute_metrics(mr, findings, gt_vulns)
+        mr_type = do_match(findings, gt_vulns, use_type=True)
+        mr_loc = do_match(findings, gt_vulns, use_type=False)
+        snap_type = compute_metrics(mr_type, findings, gt_vulns)
+        snap_loc = compute_metrics(mr_loc, findings, gt_vulns)
+        # score.value 用 A 套（类型+位置）；B 套（仅位置）进 metadata sidecar
+        mr, snap = mr_type, snap_type
 
         score = Score(extracted_prediction=filtered_prediction, prediction=original_prediction)
         # F1 排首位：Report.score 取 metrics[0]（report.py:_set_score），首个 key
@@ -279,13 +283,22 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             f'TP={snap.tp} FP={snap.fp} FN={snap.fn} '
             f'P={snap.precision:.3f} R={snap.recall:.3f} Cov={snap.coverage:.3f}')
         # 匹配明细落 score.metadata（不被指标聚合，随 review 缓存传给前端 predictions 漏洞视图）
+        # schema:2 含两套匹配（type=类型+位置 / loc=仅位置），供前端 toggle 对照
+        def _pack(mr_x: MatchResult, snap_x: MetricsSnapshot) -> dict:
+            return {
+                'matches': [m.model_dump() for m in mr_x.matches],
+                'classifications': dict(mr_x.classifications),
+                'missed_gt': list(mr_x.missed_gt),
+                'summary': {'tp': snap_x.tp, 'fp': snap_x.fp, 'fn': snap_x.fn,
+                            'precision': snap_x.precision, 'recall': snap_x.recall,
+                            'f1': snap_x.f1, 'coverage': snap_x.coverage,
+                            'findings_total': snap_x.findings_total, 'gt_total': snap_x.gt_total},
+                'buckets': [b.model_dump() for b in snap_x.buckets],
+            }
         score.metadata = {'vuln_match': {
-            'schema': 1,
+            'schema': 2,
             'gt': [g.model_dump() for g in gt_vulns],
-            'matches': [m.model_dump() for m in mr.matches],
-            'classifications': dict(mr.classifications),
-            'missed_gt': list(mr.missed_gt),
-            'summary': {'tp': snap.tp, 'fp': snap.fp, 'fn': snap.fn,
-                        'findings_total': len(findings), 'gt_total': len(gt_vulns)},
+            'type': _pack(mr_type, snap_type),
+            'loc': _pack(mr_loc, snap_loc),
         }}
         return score

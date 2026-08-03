@@ -343,10 +343,32 @@ def _build_prediction_row(
     }
 
     # vuln_scan: join findings_raw + score.metadata.vuln_match → Findings（GT↔finding 浏览）
+    # schema:2 含两套匹配（type=类型+位置 / loc=仅位置）；老 schema:1 → loc=type fallback
     vm = (score.metadata or {}).get('vuln_match')
     if vm and findings_raw:
-        class_map = vm.get('classifications', {})
-        gt_by_finding = {m.get('finding_id'): m.get('gt_id') for m in vm.get('matches', [])}
+        if vm.get('schema', 1) >= 2 and vm.get('type') and vm.get('loc'):
+            t_pack, l_pack = vm['type'], vm['loc']
+        else:
+            t_pack = l_pack = {
+                'matches': vm.get('matches', []), 'classifications': vm.get('classifications', {}),
+                'missed_gt': vm.get('missed_gt', []), 'summary': vm.get('summary', {}),
+                'buckets': vm.get('buckets', []),
+            }
+
+        def _gf_map(pack):
+            return {m.get('finding_id'): m.get('gt_id') for m in pack.get('matches', [])}
+
+        def _matched_map(pack):
+            mbg: Dict[str, List[str]] = {}
+            for m in pack.get('matches', []):
+                mbg.setdefault(m.get('gt_id'), []).append(m.get('finding_id'))
+            return mbg
+
+        t_cm, l_cm = t_pack.get('classifications', {}), l_pack.get('classifications', {})
+        t_gf, l_gf = _gf_map(t_pack), _gf_map(l_pack)
+        t_matched, l_matched = _matched_map(t_pack), _matched_map(l_pack)
+        t_missed, l_missed = set(t_pack.get('missed_gt', [])), set(l_pack.get('missed_gt', []))
+
         findings_out = []
         for fr in findings_raw:
             fid = fr.get('id') or fr.get('finding_id')
@@ -362,24 +384,28 @@ def _build_prediction_row(
                 'source': fr.get('source'),
                 'sink': fr.get('sink'),
                 'call_chain': fr.get('call_chain'),
-                'classification': class_map.get(fid, 'FP'),
-                'gt_id': gt_by_finding.get(fid),
+                'classification': t_cm.get(fid, 'FP'),
+                'gt_id': t_gf.get(fid),
+                'classification_loc': l_cm.get(fid, 'FP'),
+                'gt_id_loc': l_gf.get(fid),
                 'raw': fr,
             })
-        matched_by_gt: Dict[str, List[str]] = {}
-        for m in vm.get('matches', []):
-            matched_by_gt.setdefault(m.get('gt_id'), []).append(m.get('finding_id'))
-        missed = set(vm.get('missed_gt', []))
+
         gt_out = []
         for g in vm.get('gt', []):
             gid = g.get('gt_id')
-            gt_out.append({**g, 'matched_finding_ids': matched_by_gt.get(gid, []), 'missed': gid in missed})
+            gt_out.append({**g,
+                           'matched_finding_ids': t_matched.get(gid, []), 'missed': gid in t_missed,
+                           'matched_finding_ids_loc': l_matched.get(gid, []), 'missed_loc': gid in l_missed})
+
         row['Findings'] = {
             'scan': {'findings_count': len(findings_raw)},
             'gt': gt_out,
             'findings': findings_out,
-            'missed_gt': vm.get('missed_gt', []),
-            'summary': vm.get('summary', {}),
+            'missed_gt': t_pack.get('missed_gt', []),       # 兼容(=type)
+            'summary': t_pack.get('summary', {}),            # 兼容(=type)
+            'type': {'summary': t_pack.get('summary', {}), 'buckets': t_pack.get('buckets', [])},
+            'loc': {'summary': l_pack.get('summary', {}), 'buckets': l_pack.get('buckets', [])},
         }
 
     return row

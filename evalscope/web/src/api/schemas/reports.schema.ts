@@ -237,6 +237,8 @@ const vulnGtSchema = z.object({
   description: z.string().nullable().optional(),
   matched_finding_ids: z.array(z.string()).optional(),
   missed: z.boolean().optional(),
+  matched_finding_ids_loc: z.array(z.string()).optional(),
+  missed_loc: z.boolean().optional(),
 }).passthrough()
 
 const vulnFindingSchema = z.object({
@@ -250,7 +252,14 @@ const vulnFindingSchema = z.object({
   description: z.string().nullable().optional(),
   classification: z.enum(['TP', 'FP']).nullable().optional(),
   gt_id: z.string().nullable().optional(),
+  classification_loc: z.enum(['TP', 'FP']).nullable().optional(),
+  gt_id_loc: z.string().nullable().optional(),
   raw: z.record(z.string(), z.unknown()).nullable().optional(),
+}).passthrough()
+
+const vulnRegimeSchema = z.object({
+  summary: z.record(z.string(), z.unknown()),
+  buckets: z.array(z.record(z.string(), z.unknown())).optional(),
 }).passthrough()
 
 const vulnFindingsSchema = z.object({
@@ -259,6 +268,8 @@ const vulnFindingsSchema = z.object({
   findings: z.array(vulnFindingSchema),
   missed_gt: z.array(z.string()),
   summary: z.record(z.string(), z.unknown()),
+  type: vulnRegimeSchema.optional(),
+  loc: vulnRegimeSchema.optional(),
 }).passthrough()
 
 /** Mirrors `PredictionRow`. */
