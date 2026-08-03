@@ -40,6 +40,7 @@ export default function ReportDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [activeDataset, setActiveDataset] = useState('')
   const [initialSubset, setInitialSubset] = useState<string | undefined>(undefined)
+  const [regime, setRegime] = useState<'type' | 'loc'>('type')
 
   // Load report when the detail inputs change. A change aborts the previous
   // request and drops its late/aborted response so only the newest
@@ -82,6 +83,25 @@ export default function ReportDetailPage() {
     return idx >= 0 ? name.slice(idx + 1) : name
   }
 
+  // 按 regime 取一个 report 的「总体」分数：type 直接用 report.score；loc 从
+  // report.metrics 找 `LocOnly/${metrics[0].name}`（如 LocOnly/Overall/F1）的 score。
+  const reportScoreOf = (report: ReportData, reg: 'type' | 'loc'): number => {
+    if (reg === 'loc') {
+      const typeMetricName = report.metrics[0]?.name
+      const locName = typeMetricName ? `LocOnly/${typeMetricName}` : 'LocOnly/Overall/F1'
+      const m = report.metrics.find((x) => x.name === locName)
+      return m?.score ?? report.score
+    }
+    return report.score
+  }
+
+  // 是否展示 regime selector：含 vuln_ 数据集，且任一 report 的 metrics 出现 LocOnly/ 前缀。
+  const showRegimeSelector = useMemo(() => {
+    const hasVulnDs = reportList.some((r) => r.dataset_name.startsWith('vuln_'))
+    const hasLocOnly = reportList.some((r) => r.metrics.some((m) => m.name.startsWith('LocOnly/')))
+    return hasVulnDs && hasLocOnly
+  }, [reportList])
+
   const overallMetric = useMemo(() => {
     if (reportList.length === 0) return { score: null, metricName: '' }
     const metricNames = reportList.map((report) => mainMetricKey(report.metrics[0]?.name))
@@ -90,10 +110,10 @@ export default function ReportDetailPage() {
       return { score: null, metricName: '' }
     }
     return {
-      score: reportList.reduce((sum, report) => sum + report.score, 0) / reportList.length,
+      score: reportList.reduce((sum, report) => sum + reportScoreOf(report, regime), 0) / reportList.length,
       metricName: metricNames[0],
     }
-  }, [reportList])
+  }, [reportList, regime])
   const totalSamples = reportList.reduce((sum, r) => {
     return sum + (r.metrics[0]?.categories?.reduce((s, c) => s + c.num, 0) ?? 0)
   }, 0)
@@ -201,6 +221,9 @@ export default function ReportDetailPage() {
         totalSamples={totalSamples}
         htmlReportUrl={htmlReportUrl}
         onDatasetClick={handleDatasetChange}
+        regime={regime}
+        onRegimeChange={setRegime}
+        showRegimeSelector={showRegimeSelector}
       />
 
       <Tabs
@@ -217,28 +240,36 @@ export default function ReportDetailPage() {
                 rootPath={rootPath}
                 taskConfig={data?.task_config}
                 onDatasetClick={handleDatasetChange}
+                regime={regime}
               />
             </div>
           ),
           'report-details-panel': renderDatasetPanel(
             <DetailsTab
-              key={activeDataset}
+              key={`${activeDataset}-${regime}`}
               reportName={reportName}
               datasetName={activeDataset}
               rootPath={rootPath}
               perfMetrics={reportList.find((r) => r.dataset_name === activeDataset)?.perf_metrics}
-              overallScore={reportList.find((r) => r.dataset_name === activeDataset)?.score}
+              overallScore={
+                (() => {
+                  const r = reportList.find((x) => x.dataset_name === activeDataset)
+                  return r ? reportScoreOf(r, regime) : undefined
+                })()
+              }
               metricName={mainMetricKey(reportList.find((r) => r.dataset_name === activeDataset)?.metrics[0]?.name)}
               onSubsetClick={handleSubsetClick}
+              regime={regime}
             />,
           ),
           'report-predictions-panel': renderDatasetPanel(
             <PredictionsTab
-              key={`${activeDataset}-${initialSubset ?? ''}`}
+              key={`${activeDataset}-${initialSubset ?? ''}-${regime}`}
               reportName={reportName}
               datasetName={activeDataset}
               rootPath={rootPath}
               initialSubset={initialSubset}
+              regime={regime}
             />,
           ),
         }}

@@ -1,21 +1,18 @@
 /**
  * vuln_scan 漏洞浏览视图：按 GT 或 Finding 维度浏览，查看 GT↔finding 匹配关系 +
- * 图灵返回的漏洞详情。顶部「评分方式」selector 切换 类型+位置 / 仅位置 两套评分，
- * 选中后 summary/列表/详情都按该套展示。
- *
- * 数据来自 PredictionRow.Findings（后端 join findings_raw + score.metadata.vuln_match）。
- * f.type = 类型+位置，f.loc = 仅位置（老报告无 loc 则隐藏 selector、回退 type）。
+ * 图灵返回的漏洞详情。regime（类型+位置/仅位置）由父组件（ReportDetailPage→PredictionsTab）
+ * 通过 props 传入，本组件不自带 selector。
  */
 import { useMemo, useState, type ReactNode } from 'react'
 import type { PredictionRow } from '@/api/types'
 
 interface Props {
   predictions: PredictionRow[]
+  regime: 'type' | 'loc'
 }
 
 type ViewMode = 'gt' | 'finding'
 type FilterKey = 'all' | 'TP' | 'FP' | 'FN'
-type Regime = 'type' | 'loc'
 
 const SEV_COLOR: Record<string, string> = {
   CRITICAL: 'var(--danger)',
@@ -25,10 +22,9 @@ const SEV_COLOR: Record<string, string> = {
   LOW: 'var(--text-muted)',
 }
 
-export default function VulnFindingsView({ predictions }: Props) {
+export default function VulnFindingsView({ predictions, regime }: Props) {
   const vulnPreds = predictions.filter((p) => p.Findings)
   const [scanIdx, setScanIdx] = useState(0)
-  const [regime, setRegime] = useState<Regime>('type')
   const [view, setView] = useState<ViewMode>('gt')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [typeFilter, setTypeFilter] = useState('')
@@ -38,9 +34,9 @@ export default function VulnFindingsView({ predictions }: Props) {
 
   const current = vulnPreds[Math.min(scanIdx, vulnPreds.length - 1)]
   const f = current?.Findings
-  const hasLoc = !!f?.loc
-  // 当前 regime 的 summary（loc 缺失回退 type）
-  const summary = (regime === 'loc' && f?.loc?.summary ? f.loc.summary : (f?.type?.summary || f?.summary || {})) as Record<string, number>
+  const summary = ((regime === 'loc' && f?.loc?.summary) ? f.loc.summary : (f?.type?.summary || f?.summary || {})) as Record<string, number>
+  const scoreVal = (current?.Score?.value || {}) as Record<string, number>
+  const overallPrefix = regime === 'loc' ? 'LocOnly/Overall/' : 'Overall/'
 
   // 按 regime 取分类/命中（loc 字段缺失回退 type 字段）
   const classOf = (it: { classification?: string | null; classification_loc?: string | null }) =>
@@ -86,7 +82,7 @@ export default function VulnFindingsView({ predictions }: Props) {
   const selGtObj = f.gt.find((g) => g.gt_id === selGt)
   const selFindingObj = f.findings.find((it) => it.finding_id === selFinding)
   const sevColor = (s?: string | null) => (s ? SEV_COLOR[s.toUpperCase()] || 'var(--text-muted)' : 'var(--text-muted)')
-  const pct = (k: string) => ((summary[k] ?? 0) * 100).toFixed(1) + '%'
+  const pct = (key: string) => ((scoreVal[overallPrefix + key] ?? 0) * 100).toFixed(1) + '%'
 
   const Chip = ({ label, value, color }: { label: string; value: ReactNode; color?: string }) => (
     <div className="px-3 py-1.5 rounded-[var(--radius-sm)] bg-[var(--bg-card2)] border border-[var(--border)] text-xs">
@@ -94,33 +90,30 @@ export default function VulnFindingsView({ predictions }: Props) {
       <span className="font-mono font-medium" style={color ? { color } : undefined}>{value}</span>
     </div>
   )
-  const selectClass = "px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
 
   return (
     <div className="flex flex-col gap-3">
-      {/* summary chips（当前 regime） */}
+      {/* summary chips */}
       <div className="flex flex-wrap items-center gap-2">
         <Chip label="GT" value={summary.gt_total ?? f.gt.length} />
         <Chip label="findings" value={summary.findings_total ?? f.findings.length} />
         <Chip label="TP" value={summary.tp ?? 0} color="var(--accent)" />
         <Chip label="FP" value={summary.fp ?? 0} color="#e8590c" />
         <Chip label="FN" value={summary.fn ?? 0} color="var(--danger)" />
-        <Chip label="P" value={pct('precision')} />
-        <Chip label="R" value={pct('recall')} />
-        <Chip label="F1" value={pct('f1')} />
+        <Chip label="P" value={pct('Precision')} />
+        <Chip label="R" value={pct('Recall')} />
+        <Chip label="F1" value={pct('F1')} />
       </div>
 
-      {/* scan / 评分方式 / view / filter / type */}
+      {/* scan / view / filter / type */}
       <div className="flex flex-wrap items-center gap-2">
         {vulnPreds.length > 1 && (
-          <select value={scanIdx} onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }} className={selectClass}>
+          <select
+            value={scanIdx}
+            onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }}
+            className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
+          >
             {vulnPreds.map((p, i) => <option key={i} value={i}>扫描 #{p.Index}</option>)}
-          </select>
-        )}
-        {hasLoc && (
-          <select value={regime} onChange={(e) => setRegime(e.target.value as Regime)} className={selectClass} aria-label="评分方式">
-            <option value="type">评分方式：类型+位置</option>
-            <option value="loc">评分方式：仅位置</option>
           </select>
         )}
         <div className="inline-flex rounded-[var(--radius)] border border-[var(--border-md)] overflow-hidden text-sm">
@@ -141,7 +134,11 @@ export default function VulnFindingsView({ predictions }: Props) {
             >{k === 'all' ? '全部' : k}</button>
           ))}
         </div>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectClass}>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
+        >
           <option value="">所有类型</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
         </select>
@@ -149,6 +146,7 @@ export default function VulnFindingsView({ predictions }: Props) {
 
       {/* master / detail */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
+        {/* 左列表 */}
         <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] max-h-[70vh] overflow-y-auto">
           {view === 'gt' ? (
             gtList.length === 0 ? <div className="p-4 text-sm text-[var(--text-muted)]">无匹配 GT</div> :
@@ -196,6 +194,7 @@ export default function VulnFindingsView({ predictions }: Props) {
           )}
         </div>
 
+        {/* 右详情 */}
         <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] p-4 min-h-[200px]">
           {view === 'gt' ? (
             selGtObj ? (

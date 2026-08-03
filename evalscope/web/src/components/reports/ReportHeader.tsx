@@ -15,6 +15,9 @@ interface Props {
   totalSamples: number
   htmlReportUrl: string
   onDatasetClick?: (dataset: string) => void
+  regime: 'type' | 'loc'
+  onRegimeChange: (r: 'type' | 'loc') => void
+  showRegimeSelector?: boolean
 }
 
 export default function ReportHeader({
@@ -26,6 +29,9 @@ export default function ReportHeader({
   totalSamples,
   htmlReportUrl,
   onDatasetClick,
+  regime,
+  onRegimeChange,
+  showRegimeSelector = false,
 }: Props) {
   const { t } = useLocale()
   const navigate = useNavigate()
@@ -79,6 +85,17 @@ export default function ReportHeader({
             <span className="text-sm text-[var(--text-muted)]">
               {totalSamples.toLocaleString()} {t('single.samples')}
             </span>
+            {showRegimeSelector && (
+              <select
+                aria-label={t('reportDetail.regimeTypeLoc')}
+                value={regime}
+                onChange={(e) => onRegimeChange(e.target.value as 'type' | 'loc')}
+                className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
+              >
+                <option value="type">{t('reportDetail.regimeTypeLoc')}</option>
+                <option value="loc">{t('reportDetail.regimeLocOnly')}</option>
+              </select>
+            )}
           </div>
         </div>
 

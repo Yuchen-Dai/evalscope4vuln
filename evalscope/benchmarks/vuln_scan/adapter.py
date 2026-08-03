@@ -260,6 +260,7 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         score = Score(extracted_prediction=filtered_prediction, prediction=original_prediction)
         # F1 排首位：Report.score 取 metrics[0]（report.py:_set_score），首个 key
         # 决定顶部 Overall Score 卡片显示哪个指标 → 让它显示主分数 F1 而非 Precision。
+        # A 套（类型+位置，主分数）
         score.value.update({
             'Overall/F1': snap.f1,
             'Overall/Precision': snap.precision,
@@ -276,6 +277,23 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             score.value[f'{b.vuln_type}/TP'] = b.tp
             score.value[f'{b.vuln_type}/FP'] = b.fp
             score.value[f'{b.vuln_type}/FN'] = b.fn
+        # B 套（仅位置）报告级指标：LocOnly/ 前缀，聚合器自动产出报告级 B 套供 DetailsTab/Overview 切换
+        score.value.update({
+            'LocOnly/Overall/F1': snap_loc.f1,
+            'LocOnly/Overall/Precision': snap_loc.precision,
+            'LocOnly/Overall/Recall': snap_loc.recall,
+            'LocOnly/Overall/Coverage': snap_loc.coverage,
+            'LocOnly/Overall/TP': snap_loc.tp,
+            'LocOnly/Overall/FP': snap_loc.fp,
+            'LocOnly/Overall/FN': snap_loc.fn,
+        })
+        for b in snap_loc.buckets:
+            score.value[f'LocOnly/{b.vuln_type}/Precision'] = b.precision
+            score.value[f'LocOnly/{b.vuln_type}/Recall'] = b.recall
+            score.value[f'LocOnly/{b.vuln_type}/F1'] = b.f1
+            score.value[f'LocOnly/{b.vuln_type}/TP'] = b.tp
+            score.value[f'LocOnly/{b.vuln_type}/FP'] = b.fp
+            score.value[f'LocOnly/{b.vuln_type}/FN'] = b.fn
 
         score.main_score_name = 'Overall/F1'
         score.explanation = (

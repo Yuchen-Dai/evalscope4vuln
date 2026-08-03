@@ -34,6 +34,8 @@ export const en: Dict = {
   totalCount: 'Total',
   totalInputTokens: 'Total Input Tokens',
   totalOutputTokens: 'Total Output Tokens',
+  regimeTypeLoc: 'Type + Location',
+  regimeLocOnly: 'Location Only',
 }
 
 export const zh: Dict = {
@@ -70,4 +72,6 @@ export const zh: Dict = {
   totalCount: '总计',
   totalInputTokens: '输入 Token 总量',
   totalOutputTokens: '输出 Token 总量',
+  regimeTypeLoc: '类型+位置',
+  regimeLocOnly: '仅位置',
 }

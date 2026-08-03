@@ -18,9 +18,10 @@ interface Props {
   rootPath: string
   report?: ReportData
   initialSubset?: string
+  regime?: 'type' | 'loc'
 }
 
-export default function PredictionsTab({ reportName, datasetName, rootPath, initialSubset }: Props) {
+export default function PredictionsTab({ reportName, datasetName, rootPath, initialSubset, regime = 'type' }: Props) {
   const { t } = useLocale()
   const [subsets, setSubsets] = useState<string[]>([])
   const [selectedSubset, setSelectedSubset] = useState('')
@@ -189,7 +190,7 @@ export default function PredictionsTab({ reportName, datasetName, rootPath, init
       <div className="flex flex-col gap-3">
         {loadError && <ErrorAlert>{loadError}</ErrorAlert>}
         {predictions.length > 0
-          ? <VulnFindingsView predictions={predictions} />
+          ? <VulnFindingsView predictions={predictions} regime={regime} />
           : <EmptyStateSystem reason="no-data" context={{ view: 'evaluations' }} />}
       </div>
     )

@@ -6,6 +6,20 @@ import { formatScore, getBoundedMetricRatio, resolveMetricKey } from '@/domain/m
 
 interface Props {
   reports: ReportData[]
+  regime?: 'type' | 'loc'
+}
+
+const LOC_ONLY_PREFIX = 'LocOnly/'
+
+// 按 regime 取每个 report 的总体分数与 metric 名（与 OverviewTab.primaryOf 同语义）。
+function primaryOf(report: ReportData, regime: 'type' | 'loc'): { score: number; metricName: string } {
+  const typeMetricName = report.metrics[0]?.name ?? 'score'
+  if (regime === 'loc') {
+    const locName = `${LOC_ONLY_PREFIX}${typeMetricName}`
+    const m = report.metrics.find((x) => x.name === locName)
+    if (m) return { score: m.score, metricName: locName }
+  }
+  return { score: report.score, metricName: typeMetricName }
 }
 
 /** SVG circular progress ring — 8px stroke (DESIGN.md `{components.score-ring}`). */
@@ -31,17 +45,16 @@ function ScoreRing({ score, size = 80 }: { score: number; size?: number }) {
   )
 }
 
-export default function ReportSummaryStats({ reports }: Props) {
+export default function ReportSummaryStats({ reports, regime = 'type' }: Props) {
   const { t } = useLocale()
 
   const stats = useMemo(() => {
     if (!reports.length) return null
 
-    const entries = reports.map((report) => ({
-      name: report.dataset_name,
-      score: report.score,
-      metricName: report.metrics[0]?.name ?? 'score',
-    }))
+    const entries = reports.map((report) => {
+      const p = primaryOf(report, regime)
+      return { name: report.dataset_name, score: p.score, metricName: p.metricName }
+    })
     const metricKey = resolveMetricKey(entries[0].metricName)
     const comparable = entries.every((entry) => resolveMetricKey(entry.metricName) === metricKey)
     const scores = entries.map((entry) => entry.score)
@@ -61,7 +74,7 @@ export default function ReportSummaryStats({ reports }: Props) {
       worst: comparable ? { name: entries[worstIdx].name, score: scores[worstIdx] } : null,
       totalSamples,
     }
-  }, [reports])
+  }, [reports, regime])
 
   if (!stats) return null
 

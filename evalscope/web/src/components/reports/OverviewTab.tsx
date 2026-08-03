@@ -16,24 +16,42 @@ interface Props {
   rootPath: string
   taskConfig?: Record<string, unknown>
   onDatasetClick?: (dataset: string) => void
+  regime?: 'type' | 'loc'
 }
 
-export default function OverviewTab({ reports, reportName, rootPath, taskConfig, onDatasetClick }: Props) {
+const LOC_ONLY_PREFIX = 'LocOnly/'
+
+// 按 regime 取每个 report 的总体分数与 metric 名：type 用 report.score + metrics[0]；
+// loc 从 metrics 找 `LocOnly/${metrics[0].name}`，找不到回退 type 字段。
+function primaryOf(report: ReportData, regime: 'type' | 'loc'): { score: number; metricName: string } {
+  const typeMetricName = report.metrics[0]?.name ?? 'score'
+  if (regime === 'loc') {
+    const locName = `${LOC_ONLY_PREFIX}${typeMetricName}`
+    const m = report.metrics.find((x) => x.name === locName)
+    if (m) return { score: m.score, metricName: locName }
+  }
+  return { score: report.score, metricName: typeMetricName }
+}
+
+export default function OverviewTab({ reports, reportName, rootPath, taskConfig, onDatasetClick, regime = 'type' }: Props) {
   const { t } = useLocale()
   const [scoreView, setScoreView] = useState<'table' | 'radar'>('table')
-  const metricKeys = reports.map((report) => resolveMetricKey(report.metrics[0]?.name ?? 'score'))
+  const metricKeys = reports.map((report) => resolveMetricKey(primaryOf(report, regime).metricName))
   const canShowRadar = reports.length >= 3
     && metricKeys.every((key) => key === metricKeys[0])
     && getMetricSpec(metricKeys[0] ?? '').spec.boundedness === 'bounded'
 
   const tableData = useMemo(() => {
-    return reports.map((r) => ({
-      Dataset: r.dataset_name,
-      Score: r.score,
-      Metric: r.metrics[0]?.name ?? 'score',
-      Samples: r.metrics[0]?.categories?.reduce((s, c) => s + c.num, 0) ?? 0,
-    }))
-  }, [reports])
+    return reports.map((r) => {
+      const p = primaryOf(r, regime)
+      return {
+        Dataset: r.dataset_name,
+        Score: p.score,
+        Metric: p.metricName,
+        Samples: r.metrics[0]?.categories?.reduce((s, c) => s + c.num, 0) ?? 0,
+      }
+    })
+  }, [reports, regime])
 
   const columns = [
     {
@@ -108,7 +126,7 @@ export default function OverviewTab({ reports, reportName, rootPath, taskConfig,
   return (
     <div className="flex flex-col gap-6">
       {/* Summary Stats */}
-      <ReportSummaryStats reports={reports} />
+      <ReportSummaryStats reports={reports} regime={regime} />
 
       <Card title={t('single.datasetScores')}>
         {canShowRadar && (

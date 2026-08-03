@@ -19,9 +19,12 @@ interface Props {
   onSubsetClick?: (subset: string) => void
   overallScore?: number
   metricName?: string
+  regime?: 'type' | 'loc'
 }
 
-export default function DetailsTab({ reportName, datasetName, rootPath, perfMetrics, onSubsetClick, overallScore, metricName = 'score' }: Props) {
+const LOC_ONLY_PREFIX = 'LocOnly/'
+
+export default function DetailsTab({ reportName, datasetName, rootPath, perfMetrics, onSubsetClick, overallScore, metricName = 'score', regime = 'type' }: Props) {
   const { t } = useLocale()
   const [analysis, setAnalysis] = useState('')
   const [analysisLoading, setAnalysisLoading] = useState(false)
@@ -53,10 +56,27 @@ export default function DetailsTab({ reportName, datasetName, rootPath, perfMetr
   }, [datasetName, reportName, rootPath])
 
   // Detect whether data has Metric column
-  const hasMetricCol = subsetData.data.length > 0 && 'Metric' in subsetData.data[0]
+  // 按 regime 过滤 subsetData.data：vuln benchmark 同一指标会有 `command-injection/F1`
+  // 与 `LocOnly/command-injection/F1` 两套行，selector 切换时只展示对应一套。
+  // 非 vuln（数据里无 LocOnly/ 行）不过滤，原样透传。
+  const hasLocOnlyRows = useMemo(
+    () => subsetData.data.some((r) => typeof r.Metric === 'string' && String(r.Metric).startsWith(LOC_ONLY_PREFIX)),
+    [subsetData.data],
+  )
+  const filteredData = useMemo(() => {
+    if (!hasLocOnlyRows) return subsetData.data
+    if (regime === 'loc') {
+      return subsetData.data
+        .filter((r) => typeof r.Metric === 'string' && String(r.Metric).startsWith(LOC_ONLY_PREFIX))
+        .map((r) => ({ ...r, Metric: String(r.Metric).slice(LOC_ONLY_PREFIX.length) }))
+    }
+    return subsetData.data.filter((r) => !(typeof r.Metric === 'string' && String(r.Metric).startsWith(LOC_ONLY_PREFIX)))
+  }, [subsetData.data, regime, hasLocOnlyRows])
+
+  const hasMetricCol = filteredData.length > 0 && 'Metric' in filteredData[0]
 
   // 漏洞 benchmark 的 Metric 形如 `vuln_type/指标` → pivot 成矩阵；否则回退扁平 Table
-  const matrixModel = useMemo(() => tryParseMatrix(subsetData.data), [subsetData.data])
+  const matrixModel = useMemo(() => tryParseMatrix(filteredData), [filteredData])
 
   const subsetColumns = [
     {
@@ -158,14 +178,14 @@ export default function DetailsTab({ reportName, datasetName, rootPath, perfMetr
       )}
 
       {/* Subset Scores Table */}
-      {subsetData.data.length > 0 && (
+      {filteredData.length > 0 && (
         <Card title={t('reportDetail.subsetScores')}>
           {matrixModel ? (
             <VulnScoreMatrix model={matrixModel} />
           ) : (
             <Table
               columns={subsetColumns}
-              data={subsetData.data}
+              data={filteredData}
               defaultSort={{ key: 'Score', dir: 'desc' }}
             />
           )}
