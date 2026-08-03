@@ -1,4 +1,373 @@
-# Flowise 漏洞测评 Ground Truth（占位）
-# 后续接真实图灵平台时，从 vuln_dataset/flowise_vuln_44_cases.md 解析 44 个 GHSA 漏洞填充此处。
+# Flowise 漏洞测评 Ground Truth（由 flowise_vuln_44_cases.md 解析生成，44 个 GHSA 漏洞）
 target: flowise
-vulnerabilities: []
+vulnerabilities:
+- gt_id: GT-001
+  vuln_type: sql-injection
+  severity: HIGH
+  cwe: GHSA-28G4-38Q8-3CWC
+  location:
+    file: packages/components/nodes/chains/GraphCypherQAChain
+  description: 'GHSA-28G4-38Q8-3CWC: `GHSA-28G4-38Q8-3CWC` CVE-2026-41274 Flowise:
+    Cypher Injection in GraphCypherQAChain'
+- gt_id: GT-002
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-2QQC-P94C-HXWH
+  location:
+    file: packages/server/src/index.ts
+  description: 'GHSA-2QQC-P94C-HXWH: `GHSA-2QQC-P94C-HXWH` Flowise: Weak Default Express
+    Session Secret'
+- gt_id: GT-003
+  vuln_type: ssrf
+  severity: HIGH
+  cwe: GHSA-2X8M-83VC-6WV4
+  location:
+    file: packages/components/src/httpSecurity.ts
+    line: 40
+  description: 'GHSA-2X8M-83VC-6WV4: `GHSA-2X8M-83VC-6WV4` CVE-2026-41272 Flowise:
+    SSRF Protection Bypass (TOCTOU & Default Insecure)'
+- gt_id: GT-004
+  vuln_type: command-injection
+  severity: CRITICAL
+  cwe: GHSA-3HJV-C53M-58JJ
+  location:
+    file: packages/components/nodes/agents/CSVAgent
+  description: 'GHSA-3HJV-C53M-58JJ: `GHSA-3HJV-C53M-58JJ` CVE-2026-41264 Flowise:
+    CSV Agent Prompt Injection Remote Code Execution Vulnerability'
+- gt_id: GT-005
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-3PRP-9GF7-4RXX
+  location:
+    file: packages/server/src/Interface.DocumentStore.ts
+    line: 300
+  description: 'GHSA-3PRP-9GF7-4RXX: `GHSA-3PRP-9GF7-4RXX` CVE-2026-41277 Flowise:
+    Mass Assignment in DocumentStore Create Endpoint Leads to Cross-'
+- gt_id: GT-006
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-48M6-CH88-55MJ
+  location:
+    file: packages/server/src/enterprise/controllers/account.controller.ts
+    line: 10
+  description: 'GHSA-48M6-CH88-55MJ: `GHSA-48M6-CH88-55MJ` CVE-2026-41267 Flowise:
+    Improper Mass Assignment in Account Registration Enables Unautho'
+- gt_id: GT-007
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-4JPM-CGX2-8H37
+  location:
+    file: packages/server/src/utils/constants.ts
+    line: 10
+  description: 'GHSA-4JPM-CGX2-8H37: `GHSA-4JPM-CGX2-8H37` CVE-2026-41266 Flowise:
+    Sensitive Data Leak in public-chatbotConfig'
+- gt_id: GT-008
+  vuln_type: mass-assignment
+  severity: MODERATE
+  cwe: GHSA-59FH-9F3P-7M39
+  location:
+    file: packages/server/src/enterprise/routes/user.route.ts
+  description: 'GHSA-59FH-9F3P-7M39: `GHSA-59FH-9F3P-7M39` Flowise: Mass Assignment
+    in PUT /api/v1/user Allows Authenticated Users to Override Pass'
+- gt_id: GT-009
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-5FW2-MWHH-9947
+  location:
+    file: packages/server/src/utils/constants.ts
+    line: 41
+  description: 'GHSA-5FW2-MWHH-9947: `GHSA-5FW2-MWHH-9947` CVE-2026-41279 Flowise:
+    Unauthenticated TTS endpoint accepts arbitrary credential IDs — '
+- gt_id: GT-010
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-5H9V-837X-M97R
+  location:
+    file: packages/server/src/services/dataset/index.ts
+    line: 203
+  description: 'GHSA-5H9V-837X-M97R: `GHSA-5H9V-837X-M97R` CVE-2026-46477 FlowiseAI:
+    Dataset create+update mass-assignment allows cross-workspace d'
+- gt_id: GT-011
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-5WXP-QJGQ-FX6M
+  location:
+    file: packages/server/src/controllers/chatflows/index.ts
+  description: 'GHSA-5WXP-QJGQ-FX6M: `GHSA-5WXP-QJGQ-FX6M` CVE-2026-42863 FlowiseAI
+    has Mass Assignment in Chatflow Update Endpoint that Allows Cro'
+- gt_id: GT-012
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-6F7G-V4PP-R667
+  location:
+    file: packages/server/src/routes/public-chatbots/index.ts
+    line: 8
+  description: 'GHSA-6F7G-V4PP-R667: `GHSA-6F7G-V4PP-R667` CVE-2026-41273 Flowise:
+    Unauthenticated OAuth 2.0 Access Token Disclosure via Public Cha'
+- gt_id: GT-013
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-6FW7-3Q8R-M5VJ
+  location:
+    file: packages/server/src/controllers
+  description: 'GHSA-6FW7-3Q8R-M5VJ: `GHSA-6FW7-3Q8R-M5VJ` CVE-2026-42861 FlowiseAI
+    has Mass Assignment in Variable Update Endpoint that Allows Cro'
+- gt_id: GT-014
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-6PCV-J4JX-M4VX
+  location:
+    file: packages/server/src/routes/oauth2/index.ts
+    line: 80
+  description: 'GHSA-6PCV-J4JX-M4VX: `GHSA-6PCV-J4JX-M4VX` Flowise: Unauthenticated
+    Information Disclosure of OAuth Secrets (Cleartext) via GET Req'
+- gt_id: GT-015
+  vuln_type: ssrf
+  severity: HIGH
+  cwe: GHSA-6R77-HQX7-7VW8
+  location:
+    file: packages/components/nodes/chains/APIChain
+  description: 'GHSA-6R77-HQX7-7VW8: `GHSA-6R77-HQX7-7VW8` CVE-2026-41271 Flowise:
+    APIChain Prompt Injection SSRF in GET/POST API Chains'
+- gt_id: GT-016
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-728H-4MWJ-F2P4
+  location:
+    file: packages/server/src/services/marketplaces/index.ts
+    line: 211
+  description: 'GHSA-728H-4MWJ-F2P4: `GHSA-728H-4MWJ-F2P4` CVE-2026-46476 FlowiseAI:
+    CustomTemplate create+update mass-assignment allows cross-work'
+- gt_id: GT-017
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-78PR-C5X5-JGGC
+  location:
+    file: packages/server/src/controllers
+  description: 'GHSA-78PR-C5X5-JGGC: `GHSA-78PR-C5X5-JGGC` CVE-2026-46475 FlowiseAI:
+    Assistant create+update mass-assignment allows cross-workspace'
+- gt_id: GT-018
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-7G73-99R4-M4MJ
+  location:
+    file: packages/server/src/services
+  description: 'GHSA-7G73-99R4-M4MJ: `GHSA-7G73-99R4-M4MJ` CVE-2026-46443 FlowiseAI
+    Vulnerable to Credential Data Leak'
+- gt_id: GT-019
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-7J65-65CR-6644
+  location:
+    file: packages/server/src/controllers/dataset/index.ts
+    line: 121
+  description: 'GHSA-7J65-65CR-6644: `GHSA-7J65-65CR-6644` CVE-2026-46478 FlowiseAI:
+    DatasetRow create+update mass-assignment allows cross-workspac'
+- gt_id: GT-020
+  vuln_type: ssrf
+  severity: MODERATE
+  cwe: GHSA-9HRV-GVRV-6GF2
+  location:
+    file: packages/components/nodes/sequentialagents/ExecuteFlow
+  description: 'GHSA-9HRV-GVRV-6GF2: `GHSA-9HRV-GVRV-6GF2` Flowise Execute Flow function
+    has an SSRF vulnerability'
+- gt_id: GT-021
+  vuln_type: command-injection
+  severity: CRITICAL
+  cwe: GHSA-9RVC-VF7M-PGM2
+  location:
+    file: packages/server/src/controllers/nodes/index.ts
+    line: 80
+  description: 'GHSA-9RVC-VF7M-PGM2: `GHSA-9RVC-VF7M-PGM2` CVE-2026-46442 FlowiseAI:
+    Authenticated Host RCE via POST /api/v1/node-custom-function a'
+- gt_id: GT-022
+  vuln_type: command-injection
+  severity: CRITICAL
+  cwe: GHSA-9WC7-MJ3F-74XV
+  location:
+    file: packages/components/nodes/agents/CSVAgent
+  description: 'GHSA-9WC7-MJ3F-74XV: `GHSA-9WC7-MJ3F-74XV` CVE-2026-41137 Flowise:
+    Code Injection in CSVAgent leads to Authenticated RCE'
+- gt_id: GT-023
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-C2C9-MFW7-P8HW
+  location:
+    file: packages/server/src/utils/constants.ts
+    line: 8
+  description: 'GHSA-C2C9-MFW7-P8HW: `GHSA-C2C9-MFW7-P8HW` Flowise: Cross-Workspace
+    Chatflow Disclosure via chatflows/apikey Endpoint Returns All U'
+- gt_id: GT-024
+  vuln_type: command-injection
+  severity: CRITICAL
+  cwe: GHSA-C9GW-HVQQ-F33R
+  location:
+    file: packages/components/nodes/tools
+  description: 'GHSA-C9GW-HVQQ-F33R: `GHSA-C9GW-HVQQ-F33R` CVE-2026-40933 Flowise:
+    Authenticated RCE Via MCP Adapters'
+- gt_id: GT-025
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-CC4F-HJPJ-G9P8
+  location:
+    file: packages/server/src
+  description: 'GHSA-CC4F-HJPJ-G9P8: `GHSA-CC4F-HJPJ-G9P8` Flowise: Weak Default JWT
+    Secrets'
+- gt_id: GT-026
+  vuln_type: command-injection
+  severity: HIGH
+  cwe: GHSA-CVRR-QHGW-2MM6
+  location:
+    file: packages/server/src/utils/buildChatflow.ts
+  description: 'GHSA-CVRR-QHGW-2MM6: `GHSA-CVRR-QHGW-2MM6` CVE-2026-41268 Flowise:
+    Parameter Override Bypass Remote Command Execution'
+- gt_id: GT-027
+  vuln_type: command-injection
+  severity: HIGH
+  cwe: GHSA-F228-CHMX-V6J6
+  location:
+    file: packages/components/nodes/agents/AirtableAgent
+  description: 'GHSA-F228-CHMX-V6J6: `GHSA-F228-CHMX-V6J6` CVE-2026-41138 Flowise:
+    Remote code execution vulnerability in AirtableAgent.ts caused b'
+- gt_id: GT-028
+  vuln_type: broken-access-control
+  severity: HIGH
+  cwe: GHSA-F6HC-C5JR-878P
+  location:
+    file: ''
+  description: 'GHSA-F6HC-C5JR-878P: `GHSA-F6HC-C5JR-878P` CVE-2026-41276 Flowise:
+    resetPassword Authentication Bypass Vulnerability'
+- gt_id: GT-029
+  vuln_type: broken-access-control
+  severity: HIGH
+  cwe: GHSA-HMG2-JJJX-JCP2
+  location:
+    file: packages/server/src/routes
+  description: 'GHSA-HMG2-JJJX-JCP2: `GHSA-HMG2-JJJX-JCP2` CVE-2026-46444 FlowiseAI:
+    Vector Store No Permission Checks'
+- gt_id: GT-030
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-HP26-Q66V-Q2W7
+  location:
+    file: packages/server/src/controllers
+  description: 'GHSA-HP26-Q66V-Q2W7: `GHSA-HP26-Q66V-Q2W7` CVE-2026-46441 FlowiseAI
+    has Mass Assignment in Assistant Update Endpoint that Allows Cr'
+- gt_id: GT-031
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-M7MQ-85XJ-9X33
+  location:
+    file: packages/server/src/enterprise/services/account.service.ts
+  description: 'GHSA-M7MQ-85XJ-9X33: `GHSA-M7MQ-85XJ-9X33` Flowise: Weak Default Token
+    Hash Secret'
+- gt_id: GT-032
+  vuln_type: sensitive-data-exposure
+  severity: MODERATE
+  cwe: GHSA-M837-XVXR-VQWG
+  location:
+    file: packages/server/src/utils/constants.ts
+    line: 41
+  description: 'GHSA-M837-XVXR-VQWG: `GHSA-M837-XVXR-VQWG` Flowise: Hardcoded CORS
+    wildcard on TTS endpoint enables cross-origin credential abuse f'
+- gt_id: GT-033
+  vuln_type: command-injection
+  severity: HIGH
+  cwe: GHSA-M99R-2HXC-CP3Q
+  location:
+    file: packages/components/nodes/tools
+  description: 'GHSA-M99R-2HXC-CP3Q: `GHSA-M99R-2HXC-CP3Q` Flowise has an MCP Security
+    Bypass that Enables RCE'
+- gt_id: GT-034
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-MQ53-PC65-WJC4
+  location:
+    file: packages/server/src/services/evaluations/index.ts
+    line: 65
+  description: 'GHSA-MQ53-PC65-WJC4: `GHSA-MQ53-PC65-WJC4` CVE-2026-46479 FlowiseAI:
+    Evaluation create+update mass-assignment allows cross-workspac'
+- gt_id: GT-035
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-PHP6-83FG-GW3G
+  location:
+    file: packages/server/src/utils/constants.ts
+    line: 35
+  description: 'GHSA-PHP6-83FG-GW3G: `GHSA-PHP6-83FG-GW3G` CVE-2026-46440 FlowiseAI
+    Exposes Basic Auth Credentials via API'
+- gt_id: GT-036
+  vuln_type: ssrf
+  severity: MODERATE
+  cwe: GHSA-QQVM-66Q4-VF5C
+  location:
+    file: packages/server/src/routes/oauth2/index.ts
+    line: 355
+  description: 'GHSA-QQVM-66Q4-VF5C: `GHSA-QQVM-66Q4-VF5C` CVE-2026-43995 Flowise:
+    SSRF Protection Bypass via Direct node-fetch / axios Usage (Patc'
+- gt_id: GT-037
+  vuln_type: file-upload
+  severity: HIGH
+  cwe: GHSA-RH7V-6W34-W2RR
+  location:
+    file: packages/server/src/routes
+  description: 'GHSA-RH7V-6W34-W2RR: `GHSA-RH7V-6W34-W2RR` CVE-2026-41269 Flowise:
+    File Upload Validation Bypass in createAttachment'
+- gt_id: GT-038
+  vuln_type: command-injection
+  severity: CRITICAL
+  cwe: GHSA-V38X-C887-992F
+  location:
+    file: packages/components/nodes/agents/AirtableAgent
+  description: 'GHSA-V38X-C887-992F: `GHSA-V38X-C887-992F` CVE-2026-41265 Flowise:
+    Airtable_Agent Code Injection Remote Code Execution Vulnerabilit'
+- gt_id: GT-039
+  vuln_type: sensitive-data-exposure
+  severity: HIGH
+  cwe: GHSA-W47F-J8RH-WX87
+  location:
+    file: packages/server/src/routes
+  description: 'GHSA-W47F-J8RH-WX87: `GHSA-W47F-J8RH-WX87` CVE-2026-41278 Flowise:
+    Public chatflow endpoints return unsanitized flowData including '
+- gt_id: GT-040
+  vuln_type: path-traversal
+  severity: MODERATE
+  cwe: GHSA-W6V6-49GH-MC9W
+  location:
+    file: packages/components/nodes/vectorstores
+  description: 'GHSA-W6V6-49GH-MC9W: `GHSA-W6V6-49GH-MC9W` Flowise: Path Traversal
+    in Vector Store basePath'
+- gt_id: GT-041
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-WXRR-JP8M-QQ7F
+  location:
+    file: packages/server/src/controllers
+  description: 'GHSA-WXRR-JP8M-QQ7F: `GHSA-WXRR-JP8M-QQ7F` CVE-2026-46480 FlowiseAI:
+    Evaluator create+update mass-assignment allows cross-workspace'
+- gt_id: GT-042
+  vuln_type: mass-assignment
+  severity: HIGH
+  cwe: GHSA-X5V6-PJ28-CWWM
+  location:
+    file: packages/server/src/controllers
+  description: 'GHSA-X5V6-PJ28-CWWM: `GHSA-X5V6-PJ28-CWWM` CVE-2026-42862 FlowiseAI
+    has Mass Assignment in Tool Update Endpoint that Allows Cross-W'
+- gt_id: GT-043
+  vuln_type: broken-access-control
+  severity: HIGH
+  cwe: GHSA-X5W6-38GP-MRQH
+  location:
+    file: packages/server/src/enterprise/services/account.service.ts
+    line: 550
+  description: 'GHSA-X5W6-38GP-MRQH: `GHSA-X5W6-38GP-MRQH` CVE-2026-41275 Flowise:
+    Password Reset Link Sent Over Unsecured HTTP'
+- gt_id: GT-044
+  vuln_type: ssrf
+  severity: HIGH
+  cwe: GHSA-XHMJ-RG95-44HV
+  location:
+    file: packages/components/src/utils.ts
+    line: 1657
+  description: 'GHSA-XHMJ-RG95-44HV: `GHSA-XHMJ-RG95-44HV` CVE-2026-41270 Flowise:
+    SSRF Protection Bypass via Unprotected Built-in HTTP Modules in '
