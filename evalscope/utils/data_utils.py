@@ -474,7 +474,7 @@ def get_vuln_scan_meta(work_dir: str, model_name: str, dataset_name: str,
     cache_manager = CacheManager(outputs, model_name, dataset_name)
     cache_key = 'default' if dataset_name == DataCollection.NAME else subset_name
 
-    project_id = job_id = ''
+    project_id = job_id = source_path = ''
     pred_path = cache_manager.get_prediction_cache_path(cache_key)
     if pred_path and os.path.exists(pred_path):
         for item in jsonl_to_list(pred_path):
@@ -483,6 +483,8 @@ def get_vuln_scan_meta(work_dir: str, model_name: str, dataset_name: str,
                 project_id = mo['project_id']
             if mo.get('job_id'):
                 job_id = mo['job_id']
+            if mo.get('source_path'):
+                source_path = mo['source_path']
             break
 
     vuln_match: Optional[Dict[str, Any]] = None
@@ -495,7 +497,7 @@ def get_vuln_scan_meta(work_dir: str, model_name: str, dataset_name: str,
                 vuln_match = vm
                 break
 
-    return {'project_id': project_id, 'job_id': job_id, 'vuln_match': vuln_match}
+    return {'project_id': project_id, 'job_id': job_id, 'source_path': source_path, 'vuln_match': vuln_match}
 
 
 def normalize_score(score):

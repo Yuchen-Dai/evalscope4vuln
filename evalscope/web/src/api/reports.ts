@@ -11,6 +11,7 @@ import {
   loadReportResponseSchema,
   predictionsResponseSchema,
   scanResponseSchema,
+  trajectorySchema,
 } from './schemas'
 import type {
   AnalysisResponse,
@@ -24,6 +25,7 @@ import type {
   LoadReportResponse,
   PredictionsResponse,
   ScanResponse,
+  Trajectory,
 } from './types'
 
 const BASE = '/api/v1/reports'
@@ -201,6 +203,26 @@ export async function stopFnAdviceTask(
 ): Promise<FnAdviceStopResponse> {
   return apiPostValidated(`${BASE}/fn-advice/stop`, {}, fnAdviceStopResponseSchema, {
     params: { task_id: taskId }, signal,
+  })
+}
+
+/** 按 finding 关联各阶段 session 轨迹（mine/verify/detect）+ 统计。 */
+export async function getTraceForFinding(
+  rootPath: string,
+  reportName: string,
+  datasetName: string,
+  taskId: string,
+  findingId?: string,
+  vulnType?: string,
+  signal?: AbortSignal,
+): Promise<Trajectory> {
+  return apiValidated(`${BASE}/trace/for-finding`, trajectorySchema, {
+    params: {
+      root_path: rootPath, report_name: reportName, dataset_name: datasetName, task_id: taskId,
+      ...(findingId ? { finding_id: findingId } : {}),
+      ...(vulnType ? { vuln_type: vulnType } : {}),
+    },
+    signal,
   })
 }
 

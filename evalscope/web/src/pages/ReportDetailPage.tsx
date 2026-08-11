@@ -13,9 +13,10 @@ import DatasetNav from '@/components/reports/DatasetNav'
 import OverviewTab from '@/components/reports/OverviewTab'
 import DetailsTab from '@/components/reports/DetailsTab'
 import PredictionsTab from '@/components/reports/PredictionsTab'
+import TrajectoryTab from '@/components/reports/TrajectoryTab'
 import { resolveMetricKey } from '@/domain/metric/registry'
 
-type TabKey = 'overview' | 'details' | 'predictions'
+type TabKey = 'overview' | 'details' | 'predictions' | 'trace'
 
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>()
@@ -140,6 +141,7 @@ export default function ReportDetailPage() {
     { key: 'overview', label: t('reportDetail.overview'), panelId: 'report-overview-panel' },
     { key: 'details', label: t('reportDetail.details'), panelId: 'report-details-panel' },
     { key: 'predictions', label: t('reportDetail.predictions'), panelId: 'report-predictions-panel' },
+    { key: 'trace', label: '挖掘轨迹', panelId: 'report-trace-panel' },
   ]
 
   const renderDatasetPanel = (content: ReactNode) => (
@@ -270,6 +272,14 @@ export default function ReportDetailPage() {
               rootPath={rootPath}
               initialSubset={initialSubset}
               regime={regime}
+            />,
+          ),
+          'report-trace-panel': renderDatasetPanel(
+            <TrajectoryTab
+              key={activeDataset}
+              reportName={reportName}
+              datasetName={activeDataset}
+              rootPath={rootPath}
             />,
           ),
         }}

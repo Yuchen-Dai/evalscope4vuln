@@ -1,20 +1,29 @@
-"""FN 漏报 LLM-as-judge 路径分析。
+"""FN 漏报路径分析（opencode agent）。
 
-针对图灵漏报的漏洞（GT 有、图灵没报），拉取该 job 的全部 opencode 挖掘 session，
-按漏洞的 source/sink 文件路径定位图灵曾接触相关文件的 session 片段，交给 LLM
-复盘「图灵为何没能挖掘出这个漏洞」，输出可操作的优化建议（帮助图灵自我迭代）。
+针对图灵漏报的漏洞（GT 有、图灵没报），给 opencode agent 一个 workdir（被测源码
+`repo/` + 图灵完整挖掘记录 `sessions.json`），让它自己 read/grep 真实代码与记录、
+迭代推理，输出「图灵为何漏挖」的原因与优化建议（帮助图灵自我迭代）。
 
-入口：``analyze_one(fn, project_id, job_id, client, judge)``（async）。
-由 reports 蓝图 ``/fn-advice`` 端点调用，结果缓存到 outputs/<task>/fn_advice/<dataset>.json。
+opencode 经 evalscope 的 run_external_agent + bridge（Responses→ChatCompletions 翻译）
+驱动，judge 配置（api_url/model_id/api_key）经 OpenAICompatibleAPI → opencode。
+
+入口：``analyze_one(fn, workdir, jcfg, sample_id)``（async）。
+worker（fn_advice_runner）建共享 workdir（解压源码 + dump sessions）后逐个 FN 调用。
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
 import time
 from typing import Any
 
-from evalscope.api.messages import ChatMessageSystem, ChatMessageUser
+from evalscope.api.dataset import Sample
+from evalscope.api.model import GenerateConfig, Model
+from evalscope.agent.external import ExternalAgentConfig
+from evalscope.agent.external.adapter import run_external_agent
+from evalscope.models.openai_compatible import OpenAICompatibleAPI
 from evalscope.utils.logger import get_logger
 
 logger = get_logger()
@@ -125,31 +134,54 @@ def summarize_sessions(sessions: list[dict], files: list[str],
     return summary, hit_tasks
 
 
-SYSTEM_PROMPT = (
-    '你是资深漏洞挖掘复盘专家。下面会给你一个被漏报的漏洞（Ground Truth，扫描器图灵未报出），'
-    '以及图灵（基于 opencode 的 agent）在本次扫描中接触该漏洞相关文件时的挖掘记录摘要。'
-    '你的任务是从挖掘路径、推理过程、工具使用等角度分析图灵为什么没能挖出这个漏洞，'
-    '并给出具体、可操作的优化建议，帮助图灵自我迭代。'
-    '用中文，以 markdown 输出，分「## 漏挖原因」和「## 优化建议」两部分，'
-    '原因要结合记录里的具体行为，建议要可落地。'
-)
+def filter_sessions(sessions: list[dict], files: list[str]) -> list[dict]:
+    """按文件路径过滤命中的完整 session（供 worker dump 给 agent，避免全量读爆 context）。
 
-USER_TEMPLATE = """# 漏洞挖掘复盘任务
+    匹配策略同 summarize_sessions（session 的 prompt+parts 文本命中文件全路径或 basename）。
+    """
+    if not files or not sessions:
+        return []
+    patterns: list[str] = []
+    for f in files:
+        patterns.append(re.escape(f))
+        base = f.rsplit('/', 1)[-1]
+        if base and base != f:
+            patterns.append(re.escape(base))
+    if not patterns:
+        return []
+    rx = re.compile('|'.join(patterns))
+    out: list[dict] = []
+    for s in sessions:
+        msg = s.get('session') or {}
+        parts = msg.get('parts') or []
+        blob = '\n'.join([s.get('prompt') or ''] + [_part_text(p) for p in parts])
+        if rx.search(blob):
+            out.append(s)
+    return out
 
-## 被漏报的漏洞（图灵未报出）
+
+INSTRUCTION_TEMPLATE = """你是漏洞挖掘复盘专家。图灵（基于 opencode 的 agent）扫描被测项目时**漏报**了下面这个漏洞（Ground Truth 有、图灵没报出）。请读取相关源码与图灵的挖掘记录，分析图灵为何漏挖，并给出可操作的优化建议。
+
+## 被漏报的漏洞
 - 漏洞类型: {vuln_type}
 - 漏洞位置: {location}
 - source: {source}
 - sink: {sink}
 - 描述: {description}
+- 相关文件: {files}
 
-## 图灵本次扫描接触相关文件的挖掘记录摘要（opencode session）
-> 相关文件: {files}
----
-{summary}
----
+## 可用资源（当前工作目录下，可自由 read/grep）
+- `./repo/` ：被测项目源码
+- `./sessions.json` ：图灵本次扫描的**完整** opencode 挖掘记录（opencode message 格式，parts 含 reasoning/text/tool；用 grep 搜文件路径/basename 可定位图灵对该文件的处理）
 
-请基于上述记录分析：图灵为何没能挖掘出这个漏洞？给出漏挖原因与优化建议。
+## 任务
+1. 读取 `./repo/` 中 source/sink 对应源码，理解漏洞。
+2. 在 `./sessions.json` 中检索图灵对这些文件的处理记录（grep 文件名）。
+3. 从挖掘路径/推理/工具使用角度分析**图灵为何漏挖此漏洞**，输出 markdown：
+   ## 漏挖原因（结合读到的具体代码行/记录）
+   ## 优化建议（可落地，帮助图灵自我迭代）
+
+注意：只做分析，不要修改任何文件。
 """
 
 
@@ -161,47 +193,57 @@ def _fmt_loc(loc: dict | None) -> str:
     return f"{f}{':' + str(line) if line else ''}" or '（未提供）'
 
 
-def build_prompt(fn: dict, summary: str, files: list[str]) -> list:
-    loc = fn.get('location') or {}
-    loc_str = _fmt_loc(loc)
-    user = USER_TEMPLATE.format(
+def build_instruction(fn: dict) -> str:
+    """构造给 opencode agent 的 instruction（漏洞信息 + 指向 ./repo 与 ./sessions.json）。"""
+    files = relevant_files(fn)
+    return INSTRUCTION_TEMPLATE.format(
         vuln_type=fn.get('vuln_type', '') or '（未知）',
-        location=loc_str,
+        location=_fmt_loc(fn.get('location') or {}),
         source=_fmt_loc(fn.get('source')),
         sink=_fmt_loc(fn.get('sink')),
         description=fn.get('description', '') or '（无）',
         files=', '.join(files) or '（无）',
-        summary=summary or '（图灵在本次扫描的 session 记录中未提及该漏洞相关文件——可能根本未触达）',
     )
-    return [ChatMessageSystem(content=SYSTEM_PROMPT), ChatMessageUser(content=user)]
 
 
-async def analyze_one(fn: dict, project_id: str, job_id: str, client: Any, judge: Any) -> dict:
-    """分析单个 FN 漏洞：拉 sessions → 按文件过滤 → LLM 复盘 → 返回结果 dict。
+async def analyze_one(fn: dict, workdir: str, jcfg: dict, sample_id: str) -> dict:
+    """跑 opencode agent 分析单个 FN 漏洞（workdir 含 repo/ + sessions.json）。
 
-    client: TuringClient 实例（需已 login）；judge: LLMJudge 实例。
-    返回 {gt_id, advice, related_files, related_sessions, status, error?, ts}。
+    jcfg: {api_url, api_key, model_id}（judge 全局配置）。
+    返回 {gt_id, advice?, related_files, status, error?, ts}。
     """
-    files = relevant_files(fn)
     gt_id = fn.get('gt_id')
-    sessions_resp = await client.get_job_sessions(project_id, job_id)
-    sessions = (sessions_resp or {}).get('sessions') or []
-    summary, hit_tasks = summarize_sessions(sessions, files)
-    messages = build_prompt(fn, summary, files)
-    advice = judge.judge(messages=messages)
+    files = relevant_files(fn)
+    instruction = build_instruction(fn)
 
-    result: dict[str, Any] = {
-        'gt_id': gt_id,
-        'related_files': files,
-        'related_sessions': len(hit_tasks),
-        'ts': int(time.time()),
-    }
+    # 规避本机 socks 代理：opencode 经 bridge → OpenAICompatibleAPI 调 judge，httpx 默认
+    # trust_env=True 会读 socks 代理报 "Unknown scheme for proxy URL socks://"。构造 client 前 unset。
+    _PROXY_KEYS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy')
+    saved_proxy = {k: os.environ.pop(k, None) for k in _PROXY_KEYS}
+    try:
+        api = OpenAICompatibleAPI(model_name=jcfg['model_id'], base_url=jcfg['api_url'], api_key=jcfg['api_key'])
+        model = Model(api=api, config=GenerateConfig(max_tokens=4096, temperature=0.0))
+        config = ExternalAgentConfig(
+            framework='opencode',
+            kwargs={'model_name': jcfg['model_id'], 'auto_install': True, 'home_override': ''},
+            environment='local', environment_extra={'working_dir': workdir}, timeout=900.0,
+        )
+        sample = Sample(input=instruction, id=sample_id)
+        result = await asyncio.to_thread(run_external_agent, config=config, model=model, sample=sample)
+        advice = (result.output.message.text or '').strip()
+    except Exception as e:
+        logger.error(f'[fn_advisor] gt_id={gt_id} opencode agent 失败: {e}', exc_info=True)
+        advice = f'[ERROR] opencode agent 失败: {e}'
+    finally:
+        os.environ.update({k: v for k, v in saved_proxy.items() if v})
+
+    out: dict[str, Any] = {'gt_id': gt_id, 'related_files': files, 'ts': int(time.time())}
     if not advice or advice.startswith('[ERROR]'):
-        result['status'] = 'error'
-        result['error'] = advice or 'LLM 返回空'
-        logger.warning(f'[fn_advisor] gt_id={gt_id} LLM 分析失败: {result["error"]}')
+        out['status'] = 'error'
+        out['error'] = advice or 'opencode 返回空'
+        logger.warning(f'[fn_advisor] gt_id={gt_id} 分析失败: {out["error"]}')
     else:
-        result['status'] = 'ok'
-        result['advice'] = advice
-        logger.info(f'[fn_advisor] gt_id={gt_id} 分析完成 (相关文件={len(files)} 相关session={len(hit_tasks)})')
-    return result
+        out['status'] = 'ok'
+        out['advice'] = advice
+        logger.info(f'[fn_advisor] gt_id={gt_id} opencode 分析完成 (相关文件={len(files)})')
+    return out

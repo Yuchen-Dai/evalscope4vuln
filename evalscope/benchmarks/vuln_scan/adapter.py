@@ -231,13 +231,14 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
                                ensure_ascii=False),
             stop_reason='stop',
         )
-        # project_id/job_id 落 metadata → 随 prediction cache 持久化，供后置 FN 漏报分析
-        # 拉图灵 sessions（reports 蓝图 /fn-advice 读此字段）
+        # project_id/job_id/source_path 落 metadata → 随 prediction cache 持久化，供后置
+        # FN 漏报分析（拉图灵 sessions + 解压源码给 opencode agent）
         model_output.metadata = {
             'findings_raw': raw_findings,
             'project_name': project_name,
             'project_id': project_id,
             'job_id': job_id,
+            'source_path': scan_cfg.get('source_path', ''),  # 已绝对化（上文 :222 解析）
         }
         return TaskState(
             model=model.name,

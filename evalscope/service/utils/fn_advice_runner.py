@@ -16,6 +16,7 @@ fn_advisor.analyze_one / relevant_files、TuringClient。
 import asyncio
 import json
 import os
+import tempfile
 import threading
 from datetime import datetime
 
@@ -115,23 +116,54 @@ def list_active_fn_tasks():
 
 # ---- worker ----
 
-def _fn_worker(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, turing_base_url, stop_event):
-    """daemon thread 入口：asyncio.run 跑串行分析循环。"""
+def _prepare_repo(source_path: str, repo_dir: str) -> bool:
+    """把被测源码落到 workdir/repo：zip 解压 / 目录 copytree / 缺失则跳过（agent 仅用 sessions）。
+
+    返回是否成功准备了源码。
+    """
+    if not source_path or not os.path.exists(source_path):
+        logger.warning(f'[fn_advice] source_path 缺失或不存在: {source_path!r} → agent 仅用 sessions（无源码）')
+        return False
+    os.makedirs(repo_dir, exist_ok=True)
+    if source_path.lower().endswith('.zip'):
+        import zipfile
+        try:
+            with zipfile.ZipFile(source_path) as z:
+                z.extractall(repo_dir)
+            return True
+        except Exception as e:
+            logger.warning(f'[fn_advice] 解压源码失败 {source_path!r}: {e}')
+            return False
+    if os.path.isdir(source_path):
+        import shutil
+        shutil.copytree(source_path, repo_dir, dirs_exist_ok=True)
+        return True
+    logger.warning(f'[fn_advice] source_path 非 zip/目录: {source_path!r} → 跳过')
+    return False
+
+
+def _fn_worker(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, source_path, turing_base_url, stop_event):
+    """daemon thread 入口：建共享 workdir（源码+sessions）→ 串行 opencode 分析循环。"""
+    import shutil
     # 延迟 import：reports.py 顶部会 import 本模块（start_fn_task 等），避免循环
-    from evalscope.service.blueprints.reports import _build_judge, _save_fn_advice
+    from evalscope.service.blueprints.reports import _save_fn_advice
 
     async def _run():
         client = TuringClient(base_url=turing_base_url)
+        workdir = tempfile.mkdtemp(prefix='fnadvice-')
         try:
             await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
-            judge = _build_judge(judge_cfg)
+            # 拉全量 sessions 存内存（不 dump 全量，避免 agent 读爆 context）；每 FN 按文件过滤后 dump
+            all_sessions = ((await client.get_job_sessions(pid, jid)) or {}).get('sessions') or []
+            _prepare_repo(source_path, os.path.join(workdir, 'repo'))
+
             total = len(fn_list)
             processed = 0
             errors: list = []
             _write_fn_progress(root, prefix, dataset, status='running', task_id=task_id,
                                total_count=total, processed_count=0, percent=0.0,
                                errors=errors, current_gt_id=None)
-            for fn in fn_list:
+            for idx, fn in enumerate(fn_list):
                 if stop_event.is_set():
                     _write_fn_progress(root, prefix, dataset, status='stopped', processed_count=processed,
                                        percent=(processed / total * 100 if total else 100),
@@ -139,9 +171,13 @@ def _fn_worker(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, tur
                     logger.info(f'[fn_advice] task {task_id} 已停止（已完成 {processed}/{total}）')
                     return
                 gt_id = fn.get('gt_id')
+                # 每 FN 按文件过滤 sessions（覆盖写小的 sessions.json 给该 FN 的 agent）
+                filtered = fn_advisor.filter_sessions(all_sessions, fn_advisor.relevant_files(fn))
+                with open(os.path.join(workdir, 'sessions.json'), 'w', encoding='utf-8') as f:
+                    json.dump(filtered, f, ensure_ascii=False)
                 _write_fn_progress(root, prefix, dataset, current_gt_id=gt_id)
                 try:
-                    r = await fn_advisor.analyze_one(fn, pid, jid, client, judge)
+                    r = await fn_advisor.analyze_one(fn, workdir, judge_cfg, idx)
                 except Exception as e:
                     logger.error(f'[fn_advice] gt_id={gt_id} 分析异常: {e}', exc_info=True)
                     r = {'gt_id': gt_id, 'status': 'error', 'error': str(e),
@@ -157,6 +193,7 @@ def _fn_worker(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, tur
             logger.info(f'[fn_advice] task {task_id} 完成: {processed}/{total} (errors={len(errors)})')
         finally:
             await client.aclose()
+            shutil.rmtree(workdir, ignore_errors=True)
 
     try:
         asyncio.run(_run())
@@ -167,12 +204,12 @@ def _fn_worker(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, tur
         unregister(task_id)
 
 
-def start_fn_task(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, turing_base_url) -> None:
+def start_fn_task(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, source_path, turing_base_url) -> None:
     """起 daemon thread 跑 fn-advice 全量分析，立即返回（不阻塞调用方）。"""
     stop_event = threading.Event()
     t = threading.Thread(
         target=_fn_worker,
-        args=(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, turing_base_url, stop_event),
+        args=(task_id, root, prefix, dataset, fn_list, pid, jid, judge_cfg, source_path, turing_base_url, stop_event),
         daemon=True, name=f'fn-advice-{task_id}',
     )
     register(task_id, t, stop_event)

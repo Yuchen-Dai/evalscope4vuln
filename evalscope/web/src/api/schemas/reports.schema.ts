@@ -345,6 +345,53 @@ export const fnAdviceStopResponseSchema = z.object({
   task_id: z.string(),
 }).passthrough()
 
+/** 挖掘轨迹：一个 step 节点（opencode part 适配）。 */
+export const traceStepSchema = z.object({
+  id: z.string(),
+  type: z.enum(['thought', 'tool', 'finding', 'conclusion', 'text']),
+  title: z.string(),
+  summary: z.string(),
+  detail: z.string().optional(),
+  time: z.number().nullable().optional(),
+  tool: z.string().optional(),
+}).passthrough()
+
+/** 轨迹阶段：一个 session（mine/verify/detect）。 */
+export const traceStageSchema = z.object({
+  task_id: z.string().nullable().optional(),
+  task_type: z.string().nullable().optional(),
+  session_id: z.string().nullable().optional(),
+  steps: z.array(traceStepSchema),
+}).passthrough()
+
+/** 轨迹统计。 */
+export const traceStatsSchema = z.object({
+  total_steps: z.number(),
+  tool_calls: z.number(),
+  thoughts: z.number(),
+  findings: z.number(),
+  conclusions: z.number(),
+  duration_ms: z.number().nullable().optional(),
+  tokens_input: z.number(),
+  tokens_output: z.number(),
+  tool_distribution: z.record(z.string(), z.number()),
+}).passthrough()
+
+/** GET /trace/for-finding 响应（按 finding 关联各阶段 session 轨迹 + 统计）。 */
+export const trajectorySchema = z.object({
+  stages: z.object({
+    mine: z.array(traceStageSchema),
+    verify: z.array(traceStageSchema),
+    detect: z.array(traceStageSchema),
+  }),
+  stats: traceStatsSchema,
+}).passthrough()
+
+export type Trajectory = z.infer<typeof trajectorySchema>
+export type TraceStep = z.infer<typeof traceStepSchema>
+export type TraceStage = z.infer<typeof traceStageSchema>
+export type TraceStats = z.infer<typeof traceStatsSchema>
+
 // ------------------------------------------------------------------ //
 // Inferred types (schema-as-source-of-truth)                          //
 // ------------------------------------------------------------------ //

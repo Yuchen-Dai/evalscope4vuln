@@ -38,6 +38,7 @@ from evalscope.utils.data_utils import (
 )
 from evalscope.benchmarks.vuln_scan import config as vb_config
 from evalscope.benchmarks.vuln_scan.analysis import fn_advisor
+from evalscope.benchmarks.vuln_scan.analysis import trace_view
 from evalscope.benchmarks.vuln_scan.turing.client import TuringClient
 from evalscope.metrics.judge.llm_judge import LLMJudge
 from evalscope.service.utils import fn_advice_runner
@@ -554,18 +555,6 @@ def _load_judge_config() -> dict | None:
     return {'api_url': api_url, 'api_key': api_key or 'EMPTY', 'model_id': model_id}
 
 
-def _build_judge(jcfg: dict) -> LLMJudge:
-    # trust_env=False 规避本机 socks 代理（与 turing/client.py 同坑）
-    return LLMJudge(
-        api_key=jcfg['api_key'],
-        api_url=jcfg['api_url'],
-        model_id=jcfg['model_id'],
-        eval_type='openai_api',
-        model_args={'http_client': httpx.Client(trust_env=False)},
-        generation_config={'temperature': 0.0, 'max_tokens': 4096},
-    )
-
-
 def _fn_advice_path(root: str, prefix: str, dataset_name: str) -> str:
     return os.path.join(root, prefix, 'fn_advice', f'{dataset_name}.json')
 
@@ -590,16 +579,24 @@ def _save_fn_advice(root: str, prefix: str, dataset_name: str, result: dict) -> 
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def _do_fn_analyze(fn: dict, project_id: str, job_id: str, base_url: str, judge: LLMJudge) -> dict:
+def _do_fn_analyze(fn: dict, project_id: str, job_id: str, source_path: str, base_url: str, jcfg: dict) -> dict:
+    """单条同步分析：建临时 workdir（拉 sessions + 解压源码）→ opencode run → 清理。"""
+    import shutil, tempfile
     client = TuringClient(base_url=base_url)
+    workdir = tempfile.mkdtemp(prefix='fnadvice-one-')
 
     async def _run():
         try:
-            # fake_turing 不校验；真实平台需 cookie（httpx jar 自动持有）
             await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
-            return await fn_advisor.analyze_one(fn, project_id, job_id, client, judge)
+            all_sessions = ((await client.get_job_sessions(project_id, job_id)) or {}).get('sessions') or []
+            filtered = fn_advisor.filter_sessions(all_sessions, fn_advisor.relevant_files(fn))
+            with open(os.path.join(workdir, 'sessions.json'), 'w', encoding='utf-8') as f:
+                json.dump(filtered, f, ensure_ascii=False)
+            fn_advice_runner._prepare_repo(source_path, os.path.join(workdir, 'repo'))
+            return await fn_advisor.analyze_one(fn, workdir, jcfg, 0)
         finally:
             await client.aclose()
+            shutil.rmtree(workdir, ignore_errors=True)
 
     try:
         return _run_async(_run())
@@ -651,7 +648,7 @@ def post_fn_advice():
                           'related_files': fn_advisor.relevant_files(fn)}
             else:
                 base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
-                result = _do_fn_analyze(fn, pid, jid, base_url, _build_judge(jcfg))
+                result = _do_fn_analyze(fn, pid, jid, meta.get('source_path', ''), base_url, jcfg)
         _save_fn_advice(root, prefix, dataset_name, result)
         return jsonify(result), 200
     except Exception as e:
@@ -717,7 +714,7 @@ def invoke_fn_advice():
         # 预写 running：worker 接管前（asyncio.run 启动有延迟），前端首次 poll 即可见进度
         fn_advice_runner._write_fn_progress(root, prefix, dataset_name, status='running', task_id=task_id,
                                             total_count=len(fn_list), processed_count=0, percent=0.0)
-        fn_advice_runner.start_fn_task(task_id, root, prefix, dataset_name, fn_list, pid, jid, jcfg, base_url)
+        fn_advice_runner.start_fn_task(task_id, root, prefix, dataset_name, fn_list, pid, jid, jcfg, meta.get('source_path', ''), base_url)
         return jsonify({'status': 'running', 'task_id': task_id}), 202
     except Exception as e:
         logger.error(f'fn-advice invoke failed: {e}', exc_info=True)
@@ -748,6 +745,47 @@ def stop_fn_advice():
         return jsonify({'error': 'task_id is required'}), 400
     ok = fn_advice_runner.stop_fn_task(task_id)
     return jsonify({'status': 'ok' if ok else 'not_found', 'task_id': task_id}), 200
+
+
+@bp_reports.route('/trace/for-finding', methods=['GET'])
+def trace_for_finding():
+    """按 finding 关联各阶段 session（mine/verify/detect）→ opencode part 适配 step + 统计。
+
+    query: {root_path?, report_name, dataset_name, task_id, finding_id?, vuln_type?}
+    纯展示，不跑 LLM。返回 {stages:{mine/verify/detect:[{task_id,task_type,steps[]}]}, stats}。
+    """
+    report_name = request.args.get('report_name')
+    dataset_name = request.args.get('dataset_name')
+    task_id = request.args.get('task_id')
+    finding_id = request.args.get('finding_id')
+    vuln_type = request.args.get('vuln_type')
+    root = _root_path()
+    if not report_name or not dataset_name or not task_id:
+        return jsonify({'error': 'report_name, dataset_name, task_id are required'}), 400
+    try:
+        prefix, model_name, _ = process_report_name(report_name)
+        work_dir = os.path.join(root, prefix)
+        meta = get_vuln_scan_meta(work_dir, model_name, dataset_name)
+        pid, jid = meta.get('project_id'), meta.get('job_id')
+        if not pid or not jid:
+            return jsonify({'error': '该报告无 project_id/job_id（老报告，需重跑评测）'}), 400
+        base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
+
+        async def _fetch():
+            client = TuringClient(base_url=base_url)
+            try:
+                await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
+                return await client.get_job_sessions(pid, jid)
+            finally:
+                await client.aclose()
+
+        sessions_resp = _run_async(_fetch())
+        sessions = (sessions_resp or {}).get('sessions') or []
+        traj = trace_view.sessions_to_trajectory(sessions, task_id, finding_id, vuln_type)
+        return jsonify(traj), 200
+    except Exception as e:
+        logger.error(f'trace/for-finding failed: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @bp_reports.route('/html', methods=['GET'])

@@ -32,4 +32,9 @@ export type {
   FnAdviceProgress,
   FnAdviceInvokeResponse,
   FnAdviceStopResponse,
+  // 挖掘轨迹展示
+  Trajectory,
+  TraceStep,
+  TraceStage,
+  TraceStats,
 } from '@/api/schemas/reports.schema'
