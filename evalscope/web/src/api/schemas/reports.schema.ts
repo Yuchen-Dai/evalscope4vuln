@@ -301,6 +301,50 @@ export const analysisResponseSchema = z.object({
   analysis: z.string(),
 })
 
+/** FN 漏报 LLM-as-judge 路径分析结果（单个漏报漏洞）。 */
+export const fnAdviceSchema = z.object({
+  gt_id: z.string(),
+  advice: z.string().nullable().optional(),
+  status: z.enum(['ok', 'error']),
+  error: z.string().nullable().optional(),
+  related_files: z.array(z.string()).optional(),
+  related_sessions: z.number().optional(),
+  ts: z.number().optional(),
+}).passthrough()
+
+/** GET /fn-advice 返回 { advice: { gt_id: fnAdvice } }。 */
+export const fnAdviceResponseSchema = z.object({
+  advice: z.record(z.string(), fnAdviceSchema),
+})
+
+/** FN 分析任务进度（GET /fn-advice/progress，按 report+dataset 维度）。 */
+export const fnAdviceProgressSchema = z.object({
+  status: z.string(),                  // idle/running/completed/error/stopped
+  percent: z.number(),
+  pipeline: z.string().optional(),
+  dataset: z.string().nullable().optional(),
+  task_id: z.string().nullable().optional(),
+  total_count: z.number().optional(),
+  processed_count: z.number().optional(),
+  current_gt_id: z.string().nullable().optional(),
+  errors: z.array(z.string()).optional(),
+  error: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+}).passthrough()
+
+/** POST /fn-advice/invoke 响应（status=running + task_id，或 status=error + error）。 */
+export const fnAdviceInvokeResponseSchema = z.object({
+  status: z.string(),
+  task_id: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+}).passthrough()
+
+/** POST /fn-advice/stop 响应。 */
+export const fnAdviceStopResponseSchema = z.object({
+  status: z.string(),
+  task_id: z.string(),
+}).passthrough()
+
 // ------------------------------------------------------------------ //
 // Inferred types (schema-as-source-of-truth)                          //
 // ------------------------------------------------------------------ //
@@ -320,3 +364,8 @@ export type PredictionRow = z.infer<typeof predictionRowSchema>
 export type PredictionsResponse = z.infer<typeof predictionsResponseSchema>
 export type ScanResponse = z.infer<typeof scanResponseSchema>
 export type AnalysisResponse = z.infer<typeof analysisResponseSchema>
+export type FnAdvice = z.infer<typeof fnAdviceSchema>
+export type FnAdviceResponse = z.infer<typeof fnAdviceResponseSchema>
+export type FnAdviceProgress = z.infer<typeof fnAdviceProgressSchema>
+export type FnAdviceInvokeResponse = z.infer<typeof fnAdviceInvokeResponseSchema>
+export type FnAdviceStopResponse = z.infer<typeof fnAdviceStopResponseSchema>

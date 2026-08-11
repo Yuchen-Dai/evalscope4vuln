@@ -49,6 +49,10 @@ class GtVuln(BaseModel):
     severity: Optional[str] = None
     location: GtLocation
     description: Optional[str] = None
+    # 数据流端点（可选，GT 未来会包含）：用于 FN 漏报分析时按 source/sink 文件路径
+    # 去图灵 session 记录里定位相关挖掘片段。缺省时分析降级用 location.file。
+    source: Optional[GtLocation] = None
+    sink: Optional[GtLocation] = None
 
 
 class GroundTruth(BaseModel):

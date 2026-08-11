@@ -1,7 +1,12 @@
-import { apiValidated } from './client'
+import { apiPostValidated, apiValidated } from './client'
 import {
   analysisResponseSchema,
   dataFrameResponseSchema,
+  fnAdviceInvokeResponseSchema,
+  fnAdviceProgressSchema,
+  fnAdviceResponseSchema,
+  fnAdviceSchema,
+  fnAdviceStopResponseSchema,
   listReportsResponseSchema,
   loadReportResponseSchema,
   predictionsResponseSchema,
@@ -10,6 +15,11 @@ import {
 import type {
   AnalysisResponse,
   DataFrameResponse,
+  FnAdvice,
+  FnAdviceInvokeResponse,
+  FnAdviceProgress,
+  FnAdviceResponse,
+  FnAdviceStopResponse,
   ListReportsResponse,
   LoadReportResponse,
   PredictionsResponse,
@@ -124,6 +134,74 @@ export async function getAnalysis(
     signal,
   })
   return res.analysis
+}
+
+/** 对单个漏报(FN)漏洞跑 LLM 路径分析（全量由前端循环调用）。 */
+export async function postFnAdvice(
+  rootPath: string,
+  reportName: string,
+  datasetName: string,
+  gtId?: string,
+  signal?: AbortSignal,
+): Promise<FnAdvice> {
+  return apiPostValidated(`${BASE}/fn-advice`, {
+    root_path: rootPath,
+    report_name: reportName,
+    dataset_name: datasetName,
+    ...(gtId ? { gt_id: gtId } : {}),
+  }, fnAdviceSchema, { signal })
+}
+
+/** 读取已缓存的 FN 漏报分析结果（前端初次加载用）。 */
+export async function getFnAdvice(
+  rootPath: string,
+  reportName: string,
+  datasetName: string,
+  signal?: AbortSignal,
+): Promise<Record<string, FnAdvice>> {
+  const res: FnAdviceResponse = await apiValidated(`${BASE}/fn-advice`, fnAdviceResponseSchema, {
+    params: { root_path: rootPath, report_name: reportName, dataset_name: datasetName },
+    signal,
+  })
+  return res.advice
+}
+
+/** 异步起 FN 全量分析任务（线程），立即返回 task_id。task_id 经 header 传（与 eval 一致）。 */
+export async function startFnAdviceTask(
+  rootPath: string,
+  reportName: string,
+  datasetName: string,
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<FnAdviceInvokeResponse> {
+  return apiPostValidated(`${BASE}/fn-advice/invoke`, {
+    root_path: rootPath, report_name: reportName, dataset_name: datasetName,
+  }, fnAdviceInvokeResponseSchema, {
+    headers: { 'EvalScope-Task-Id': taskId }, signal,
+  })
+}
+
+/** 查 FN 分析任务进度（按 report+dataset 维度，前端切走切回判 running）。 */
+export async function getFnAdviceProgress(
+  rootPath: string,
+  reportName: string,
+  datasetName: string,
+  signal?: AbortSignal,
+): Promise<FnAdviceProgress> {
+  return apiValidated(`${BASE}/fn-advice/progress`, fnAdviceProgressSchema, {
+    params: { root_path: rootPath, report_name: reportName, dataset_name: datasetName },
+    signal,
+  })
+}
+
+/** 停止 FN 分析任务（worker 下个 gt_id 边界退出，已完成结果已落盘）。 */
+export async function stopFnAdviceTask(
+  taskId: string,
+  signal?: AbortSignal,
+): Promise<FnAdviceStopResponse> {
+  return apiPostValidated(`${BASE}/fn-advice/stop`, {}, fnAdviceStopResponseSchema, {
+    params: { task_id: taskId }, signal,
+  })
 }
 
 export function getHtmlReportUrl(rootPath: string, reportName: string): string {

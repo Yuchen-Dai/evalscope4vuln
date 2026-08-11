@@ -462,6 +462,42 @@ def get_model_prediction(work_dir: str, model_name: str, dataset_name: str, subs
     return pd.DataFrame(ds)
 
 
+def get_vuln_scan_meta(work_dir: str, model_name: str, dataset_name: str,
+                       subset_name: str = 'default') -> Dict[str, Any]:
+    """读取 vuln_scan 评测的 project_id/job_id 与 vuln_match，供 FN 漏报分析端点用。
+
+    - project_id/job_id 来自 prediction cache 的 model_output.metadata（adapter run_inference 写入）；
+    - vuln_match 来自 review cache 的 score.metadata（adapter match_score 写入）。
+    vuln_scan 通常单 sample，取首条非空。非 vuln benchmark 或缓存缺失返回空值。
+    """
+    outputs = OutputsStructure(work_dir, is_make=False)
+    cache_manager = CacheManager(outputs, model_name, dataset_name)
+    cache_key = 'default' if dataset_name == DataCollection.NAME else subset_name
+
+    project_id = job_id = ''
+    pred_path = cache_manager.get_prediction_cache_path(cache_key)
+    if pred_path and os.path.exists(pred_path):
+        for item in jsonl_to_list(pred_path):
+            mo = (item.get('model_output') or {}).get('metadata') or {}
+            if mo.get('project_id'):
+                project_id = mo['project_id']
+            if mo.get('job_id'):
+                job_id = mo['job_id']
+            break
+
+    vuln_match: Optional[Dict[str, Any]] = None
+    review_path = cache_manager.get_review_cache_path(cache_key)
+    if review_path and os.path.exists(review_path):
+        for item in jsonl_to_list(review_path):
+            sc = (item.get('sample_score') or {}).get('score') or {}
+            vm = (sc.get('metadata') or {}).get('vuln_match')
+            if vm:
+                vuln_match = vm
+                break
+
+    return {'project_id': project_id, 'job_id': job_id, 'vuln_match': vuln_match}
+
+
 def normalize_score(score):
     try:
         if isinstance(score, bool):

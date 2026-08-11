@@ -4,11 +4,24 @@
  * 通过 props 传入，本组件不自带 selector。
  */
 import { useMemo, useState, type ReactNode } from 'react'
-import type { PredictionRow } from '@/api/types'
+import type { PredictionRow, FnAdvice } from '@/api/types'
 
 interface Props {
   predictions: PredictionRow[]
   regime: 'type' | 'loc'
+  /** FN 漏报 LLM 分析结果（gt_id → advice），由 PredictionsTab 加载/触发 */
+  fnAdvice?: Record<string, FnAdvice>
+  /** 正在分析的 gt_id 集合（单个按钮 loading） */
+  analyzingGtIds?: Set<string>
+  /** 全量分析进度（done/total/current_gt_id），null 表示未在批量分析 */
+  analyzingAll?: { done: number; total: number; current?: string | null } | null
+  /** 全量任务运行中（服务端任务态，切走切回可恢复） */
+  fnRunning?: boolean
+  /** 全量任务启动错误（如 judge 未配） */
+  fnAllError?: string | null
+  onAnalyze?: (gtId: string) => void
+  onAnalyzeAll?: (gtIds: string[]) => void
+  onStopFnAdvice?: () => void
 }
 
 type ViewMode = 'gt' | 'finding'
@@ -22,7 +35,9 @@ const SEV_COLOR: Record<string, string> = {
   LOW: 'var(--text-muted)',
 }
 
-export default function VulnFindingsView({ predictions, regime }: Props) {
+export default function VulnFindingsView({
+  predictions, regime, fnAdvice, analyzingGtIds, analyzingAll, fnRunning, fnAllError, onAnalyze, onAnalyzeAll, onStopFnAdvice,
+}: Props) {
   const vulnPreds = predictions.filter((p) => p.Findings)
   const [scanIdx, setScanIdx] = useState(0)
   const [view, setView] = useState<ViewMode>('gt')
@@ -54,6 +69,13 @@ export default function VulnFindingsView({ predictions, regime }: Props) {
     f?.findings.forEach((it) => it.vuln_type && s.add(it.vuln_type))
     return [...s].sort()
   }, [f])
+
+  // 漏报(FN)的 gt_id 列表（missedOf 按 regime 取），供「全量分析漏报」
+  const fnGtIds = useMemo(
+    () => (f?.gt.filter((g) => missedOf(g)).map((g) => g.gt_id)) ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [f, regime],
+  )
 
   const gtList = useMemo(() => {
     if (!f) return []
@@ -142,7 +164,41 @@ export default function VulnFindingsView({ predictions, regime }: Props) {
           <option value="">所有类型</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
         </select>
+        {onAnalyzeAll && fnGtIds.length > 0 && (
+          <div className="flex items-center gap-2 ml-auto">
+            {fnRunning && analyzingAll && (
+              <span className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                <div className="h-1.5 w-24 rounded-full bg-[var(--border)] overflow-hidden">
+                  <div className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+                       style={{ width: `${analyzingAll.total ? (analyzingAll.done / analyzingAll.total) * 100 : 0}%` }} />
+                </div>
+                <span className="tabular-nums whitespace-nowrap">
+                  {analyzingAll.done}/{analyzingAll.total}{analyzingAll.current ? ` · ${analyzingAll.current}` : ''}
+                </span>
+              </span>
+            )}
+            {fnRunning && onStopFnAdvice && (
+              <button onClick={onStopFnAdvice}
+                className="px-2 py-1 text-xs rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] cursor-pointer transition-colors"
+                title="停止（下个漏洞边界退出，已完成结果保留）"
+              >停止</button>
+            )}
+            <button
+              onClick={() => onAnalyzeAll(fnGtIds)}
+              disabled={!!fnRunning}
+              className="px-3 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
+              title="对全部漏报(FN)漏洞逐个跑 AI 路径分析"
+            >
+              {fnRunning ? '分析中…' : `全量分析漏报(${fnGtIds.length})`}
+            </button>
+          </div>
+        )}
       </div>
+      {fnAllError && (
+        <div className="text-xs text-[var(--danger)] break-all">
+          ⚠ {fnAllError}（可在右上角 ⚙ 配置 Judge 模型后重试）
+        </div>
+      )}
 
       {/* master / detail */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
@@ -203,6 +259,14 @@ export default function VulnFindingsView({ predictions, regime }: Props) {
                   <h3 className="text-base font-semibold">{selGtObj.gt_id}</h3>
                   {missedOf(selGtObj) && <span className="text-xs px-2 py-0.5 rounded bg-[var(--danger)] text-white">图灵漏报 FN</span>}
                 </div>
+                {missedOf(selGtObj) && onAnalyze && (
+                  <FnAdviceBlock
+                    gtId={selGtObj.gt_id}
+                    advice={fnAdvice?.[selGtObj.gt_id]}
+                    analyzing={analyzingGtIds?.has(selGtObj.gt_id)}
+                    onAnalyze={onAnalyze}
+                  />
+                )}
                 <Detail label="类型" value={selGtObj.vuln_type} />
                 <Detail label="严重度" value={selGtObj.severity} color={sevColor(selGtObj.severity)} />
                 <Detail label="CWE/ID" value={selGtObj.cwe} />
@@ -275,4 +339,42 @@ function Detail({ label, value, color }: { label: string; value?: ReactNode; col
 
 function EmptyDetail() {
   return <div className="text-sm text-[var(--text-muted)]">从左侧选择一项查看详情</div>
+}
+
+/** FN 漏报 LLM 分析建议区块：触发按钮 + 建议/错误展示。 */
+function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
+  gtId: string
+  advice?: FnAdvice
+  analyzing?: boolean
+  onAnalyze?: (gtId: string) => void
+}) {
+  return (
+    <div className="mt-1 pt-2 border-t border-[var(--border)]">
+      <div className="flex items-center gap-2 mb-1">
+        <button
+          onClick={() => onAnalyze?.(gtId)}
+          disabled={analyzing}
+          className="px-2.5 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
+        >
+          {analyzing ? '分析中...' : (advice ? '重新分析' : '分析漏报原因')}
+        </button>
+        {advice?.status === 'ok' && advice.related_sessions != null && (
+          <span className="text-[10px] text-[var(--text-muted)]">
+            命中 {advice.related_sessions} 条相关 session · 文件 {advice.related_files?.length ?? 0}
+          </span>
+        )}
+      </div>
+      {!advice && (
+        <div className="text-xs text-[var(--text-muted)]">
+          点击按钮，AI 复盘图灵为何漏挖此漏洞（基于图灵接触相关文件的挖掘 session）
+        </div>
+      )}
+      {advice?.status === 'error' && (
+        <div className="text-xs text-[var(--danger)] break-all">⚠ {advice.error}</div>
+      )}
+      {advice?.status === 'ok' && advice.advice && (
+        <pre className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">{advice.advice}</pre>
+      )}
+    </div>
+  )
 }

@@ -22,6 +22,9 @@ export const en: Dict = {
     phase3Timeout: 'Phase 3 Timeout',
     turingBaseUrl: 'Turing Base URL',
     pollTimeout: 'Poll Timeout (s)',
+    judgeApiUrl: 'Judge API URL',
+    judgeApiKey: 'Judge API Key',
+    judgeModelId: 'Judge Model',
     seconds: 'seconds',
   },
 }
@@ -48,6 +51,9 @@ export const zh: Dict = {
     phase3Timeout: 'Phase 3 超时',
     turingBaseUrl: '图灵平台地址',
     pollTimeout: '轮询超时 (秒)',
+    judgeApiUrl: 'Judge API 地址',
+    judgeApiKey: 'Judge API Key',
+    judgeModelId: 'Judge 模型',
     seconds: '秒',
   },
 }

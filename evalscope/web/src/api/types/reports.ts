@@ -26,4 +26,10 @@ export type {
   PredictionsResponse,
   ScanResponse,
   AnalysisResponse,
+  // FN 漏报 LLM-as-judge 路径分析
+  FnAdvice,
+  FnAdviceResponse,
+  FnAdviceProgress,
+  FnAdviceInvokeResponse,
+  FnAdviceStopResponse,
 } from '@/api/schemas/reports.schema'

@@ -4,6 +4,8 @@ Exposes the file-system report data through a REST API so that the
 React SPA frontend can load reports, predictions and analyses without
 direct filesystem access.
 """
+import asyncio
+import httpx
 import json
 import mimetypes
 import os
@@ -27,12 +29,18 @@ from evalscope.utils.data_utils import (
     get_compare_report_df,
     get_model_prediction,
     get_report_analysis,
+    get_vuln_scan_meta,
     load_multi_report,
     load_single_report,
     normalize_score,
     process_report_name,
     scan_for_report_folders,
 )
+from evalscope.benchmarks.vuln_scan import config as vb_config
+from evalscope.benchmarks.vuln_scan.analysis import fn_advisor
+from evalscope.benchmarks.vuln_scan.turing.client import TuringClient
+from evalscope.metrics.judge.llm_judge import LLMJudge
+from evalscope.service.utils import fn_advice_runner
 from evalscope.utils.io_utils import OutputsStructure
 from evalscope.utils.logger import get_logger
 from ..utils import OUTPUT_DIR, validate_task_id
@@ -493,6 +501,253 @@ def get_analysis():
     except Exception as e:
         logger.error(f'Failed to get analysis: {e}')
         return jsonify({'error': str(e)}), 500
+
+
+# ------------------------------------------------------------------
+# FN 漏报 LLM-as-judge 路径分析（/fn-advice）
+# ------------------------------------------------------------------
+
+def _run_async(coro):
+    """在 Flask 同步请求里跑 async（拉图灵 sessions + judge 调用）。"""
+    try:
+        asyncio.get_running_loop()
+        import threading
+        box = [None]
+
+        def _r():
+            box[0] = asyncio.run(coro)
+        t = threading.Thread(target=_r)
+        t.start()
+        t.join()
+        return box[0]
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+def _read_scan_config(work_dir: str) -> dict:
+    try:
+        with open(os.path.join(work_dir, 'scan_config.json'), encoding='utf-8') as f:
+            return json.load(f) or {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _load_judge_config() -> dict | None:
+    """judge 模型配置：全局 judge_config.json 优先，环境变量兜底。未配返回 None。
+
+    全局配置由 /api/v1/settings/judge 写入 <outputs_root>/judge_config.json，
+    评测前后均可配置（不再依赖 per-task scan_config.json）。
+    """
+    from flask import current_app
+    cfg_path = os.path.join(current_app.config.get('OUTPUTS_ROOT') or OUTPUT_DIR, 'judge_config.json')
+    cfg = {}
+    try:
+        with open(cfg_path, encoding='utf-8') as f:
+            cfg = json.load(f) or {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    api_url = cfg.get('api_url') or os.environ.get('VULN_JUDGE_API_URL')
+    api_key = cfg.get('api_key') or os.environ.get('VULN_JUDGE_API_KEY')
+    model_id = cfg.get('model_id') or os.environ.get('VULN_JUDGE_MODEL')
+    if not (api_url and model_id):
+        return None
+    return {'api_url': api_url, 'api_key': api_key or 'EMPTY', 'model_id': model_id}
+
+
+def _build_judge(jcfg: dict) -> LLMJudge:
+    # trust_env=False 规避本机 socks 代理（与 turing/client.py 同坑）
+    return LLMJudge(
+        api_key=jcfg['api_key'],
+        api_url=jcfg['api_url'],
+        model_id=jcfg['model_id'],
+        eval_type='openai_api',
+        model_args={'http_client': httpx.Client(trust_env=False)},
+        generation_config={'temperature': 0.0, 'max_tokens': 4096},
+    )
+
+
+def _fn_advice_path(root: str, prefix: str, dataset_name: str) -> str:
+    return os.path.join(root, prefix, 'fn_advice', f'{dataset_name}.json')
+
+
+def _load_fn_advice(root: str, prefix: str, dataset_name: str) -> dict:
+    path = _fn_advice_path(root, prefix, dataset_name)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f) or {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_fn_advice(root: str, prefix: str, dataset_name: str, result: dict) -> None:
+    path = _fn_advice_path(root, prefix, dataset_name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data = _load_fn_advice(root, prefix, dataset_name)
+    data[result.get('gt_id')] = result
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _do_fn_analyze(fn: dict, project_id: str, job_id: str, base_url: str, judge: LLMJudge) -> dict:
+    client = TuringClient(base_url=base_url)
+
+    async def _run():
+        try:
+            # fake_turing 不校验；真实平台需 cookie（httpx jar 自动持有）
+            await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
+            return await fn_advisor.analyze_one(fn, project_id, job_id, client, judge)
+        finally:
+            await client.aclose()
+
+    try:
+        return _run_async(_run())
+    except Exception as e:
+        logger.error(f'fn-advice analyze failed (gt_id={fn.get("gt_id")}): {e}', exc_info=True)
+        return {'gt_id': fn.get('gt_id'), 'status': 'error', 'error': str(e),
+                'related_files': fn_advisor.relevant_files(fn)}
+
+
+@bp_reports.route('/fn-advice', methods=['POST'])
+def post_fn_advice():
+    """对单个漏报(FN)漏洞跑 LLM 路径分析。全量由前端循环调用本端点。
+
+    JSON body: {root_path?, report_name, dataset_name, gt_id?}
+    gt_id 省略时取首个漏报。结果缓存到 outputs/<task>/fn_advice/<dataset>.json。
+    """
+    data = request.get_json(silent=True) or {}
+    report_name = data.get('report_name')
+    dataset_name = data.get('dataset_name')
+    gt_id = data.get('gt_id')
+    root = data.get('root_path') or _root_path()
+    if not report_name or not dataset_name:
+        return jsonify({'error': 'report_name and dataset_name are required'}), 400
+    try:
+        prefix, model_name, _ = process_report_name(report_name)
+        work_dir = os.path.join(root, prefix)
+        meta = get_vuln_scan_meta(work_dir, model_name, dataset_name)
+        vm = meta.get('vuln_match')
+        if not vm:
+            return jsonify({'error': '无 vuln_match（非 vuln benchmark 或缓存缺失）'}), 400
+        fn_list = fn_advisor.extract_fn(vm)
+        if not fn_list:
+            return jsonify({'error': '该数据集无漏报(FN)漏洞'}), 400
+        target = [g for g in fn_list if g.get('gt_id') == gt_id] if gt_id else fn_list[:1]
+        if not target:
+            return jsonify({'error': f'未找到 gt_id={gt_id} 的漏报'}), 404
+        fn = target[0]
+
+        jcfg = _load_judge_config()
+        if not jcfg:
+            result = {'gt_id': fn.get('gt_id'), 'status': 'error',
+                      'error': 'judge 模型未配置（点击右上角 ⚙ 设置中配置）',
+                      'related_files': fn_advisor.relevant_files(fn)}
+        else:
+            pid, jid = meta.get('project_id'), meta.get('job_id')
+            if not pid or not jid:
+                result = {'gt_id': fn.get('gt_id'), 'status': 'error',
+                          'error': '该报告无 project_id/job_id（老报告，需重跑评测以持久化）',
+                          'related_files': fn_advisor.relevant_files(fn)}
+            else:
+                base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
+                result = _do_fn_analyze(fn, pid, jid, base_url, _build_judge(jcfg))
+        _save_fn_advice(root, prefix, dataset_name, result)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f'fn-advice failed: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@bp_reports.route('/fn-advice', methods=['GET'])
+def get_fn_advice():
+    """读取已缓存的 FN 漏报分析结果（前端初次加载用）。"""
+    report_name = request.args.get('report_name')
+    dataset_name = request.args.get('dataset_name')
+    root = _root_path()
+    if not report_name or not dataset_name:
+        return jsonify({'error': 'report_name and dataset_name are required'}), 400
+    try:
+        prefix, _, _ = process_report_name(report_name)
+        return jsonify({'advice': _load_fn_advice(root, prefix, dataset_name)}), 200
+    except Exception as e:
+        logger.error(f'get fn-advice failed: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@bp_reports.route('/fn-advice/invoke', methods=['POST'])
+def invoke_fn_advice():
+    """异步起 FN 漏报全量分析任务（线程），立即返回。前端轮询 /progress。
+
+    JSON body: {root_path?, report_name, dataset_name}；header EvalScope-Task-Id。
+    judge 未配 / 老报告无 pid,jid → 200 + status:error（不起任务）。
+    """
+    data = request.get_json(silent=True) or {}
+    report_name = data.get('report_name')
+    dataset_name = data.get('dataset_name')
+    root = data.get('root_path') or _root_path()
+    if not report_name or not dataset_name:
+        return jsonify({'error': 'report_name and dataset_name are required'}), 400
+    task_id = request.headers.get('EvalScope-Task-Id', '')
+    try:
+        validate_task_id(task_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    try:
+        prefix, model_name, _ = process_report_name(report_name)
+        work_dir = os.path.join(root, prefix)
+        meta = get_vuln_scan_meta(work_dir, model_name, dataset_name)
+        vm = meta.get('vuln_match')
+        if not vm:
+            return jsonify({'error': '无 vuln_match（非 vuln benchmark 或缓存缺失）'}), 400
+        fn_list = fn_advisor.extract_fn(vm)
+        if not fn_list:
+            return jsonify({'error': '该数据集无漏报(FN)漏洞'}), 400
+        jcfg = _load_judge_config()
+        if not jcfg:
+            return jsonify({'status': 'error',
+                            'error': 'judge 模型未配置（点击右上角 ⚙ 设置中配置）'}), 200
+        pid, jid = meta.get('project_id'), meta.get('job_id')
+        if not pid or not jid:
+            return jsonify({'status': 'error',
+                            'error': '该报告无 project_id/job_id（老报告，需重跑评测以持久化）'}), 200
+        if fn_advice_runner.is_fn_task_running_by_prefix(root, prefix, dataset_name):
+            return jsonify({'error': '该数据集已有 FN 分析任务在运行'}), 409
+        base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
+        # 预写 running：worker 接管前（asyncio.run 启动有延迟），前端首次 poll 即可见进度
+        fn_advice_runner._write_fn_progress(root, prefix, dataset_name, status='running', task_id=task_id,
+                                            total_count=len(fn_list), processed_count=0, percent=0.0)
+        fn_advice_runner.start_fn_task(task_id, root, prefix, dataset_name, fn_list, pid, jid, jcfg, base_url)
+        return jsonify({'status': 'running', 'task_id': task_id}), 202
+    except Exception as e:
+        logger.error(f'fn-advice invoke failed: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@bp_reports.route('/fn-advice/progress', methods=['GET'])
+def fn_advice_progress():
+    """读取 FN 分析任务进度（按 report+dataset 维度，前端切走切回判 running）。"""
+    report_name = request.args.get('report_name')
+    dataset_name = request.args.get('dataset_name')
+    root = _root_path()
+    if not report_name or not dataset_name:
+        return jsonify({'error': 'report_name and dataset_name are required'}), 400
+    try:
+        prefix, _, _ = process_report_name(report_name)
+        return jsonify(fn_advice_runner._read_fn_progress(root, prefix, dataset_name)), 200
+    except Exception as e:
+        logger.error(f'fn-advice progress failed: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@bp_reports.route('/fn-advice/stop', methods=['POST'])
+def stop_fn_advice():
+    """停止 FN 分析任务（worker 下个 gt_id 边界退出，已完成结果已落盘）。"""
+    task_id = request.args.get('task_id', '')
+    if not task_id:
+        return jsonify({'error': 'task_id is required'}), 400
+    ok = fn_advice_runner.stop_fn_task(task_id)
+    return jsonify({'status': 'ok' if ok else 'not_found', 'task_id': task_id}), 200
 
 
 @bp_reports.route('/html', methods=['GET'])

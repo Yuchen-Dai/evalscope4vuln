@@ -205,3 +205,13 @@ class TuringClient:
                                    params={"job_id": job_id})
         r.raise_for_status()
         return r.json()
+
+    async def get_job_sessions(self, project_id: str, job_id: str) -> dict:
+        """拉取某 job 的全部 opencode session（FN 漏报路径分析用）。
+
+        返回 {sessions:[{task_id, session_id, task_type, prompt, status, created_at, session}]}，
+        session 为 opencode message（{info, parts}）。真实图灵接口契约确认后只改本方法。
+        """
+        r = await self._client.get(f"/api/projects/{project_id}/jobs/{job_id}/sessions")
+        r.raise_for_status()
+        return r.json()

@@ -3,7 +3,8 @@ import { NavLink } from 'react-router-dom'
 import { useLocale } from '@/contexts/LocaleContext'
 import LocaleToggle from './LocaleToggle'
 import ThemeToggle from './ThemeToggle'
-import { BarChart3, FlaskConical, BookOpen, FileText, Menu, X } from 'lucide-react'
+import JudgeConfigModal from '@/components/settings/JudgeConfigModal'
+import { BarChart3, FlaskConical, BookOpen, FileText, Menu, X, Settings } from 'lucide-react'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   `coarse-target flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -29,6 +30,7 @@ const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
 export default function TopNav() {
   const { t } = useLocale()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const navItems = [
     { to: '/dashboard', icon: <BarChart3 size={15} />, label: t('nav.dashboard') },
@@ -90,6 +92,14 @@ export default function TopNav() {
           </a>
           <LocaleToggle />
           <ThemeToggle />
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="coarse-target w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-card2)] transition-all duration-200"
+            aria-label="Judge 模型配置"
+            title="Judge 模型配置"
+          >
+            <Settings size={16} />
+          </button>
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -119,6 +129,7 @@ export default function TopNav() {
           ))}
         </nav>
       </div>
+      <JudgeConfigModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   )
 }

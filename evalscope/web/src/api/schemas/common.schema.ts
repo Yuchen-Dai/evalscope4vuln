@@ -21,6 +21,21 @@ export const configResponseSchema = z.object({
   outputs_root: z.string(),
 })
 
+/** 全局 judge 模型配置（GET /settings/judge；api_key 不回明文，仅 has_api_key）。 */
+export const judgeConfigSchema = z.object({
+  api_url: z.string(),
+  model_id: z.string(),
+  has_api_key: z.boolean(),
+})
+
+/** POST /settings/judge 保存响应。 */
+export const judgeConfigSaveResponseSchema = z.object({
+  status: z.string(),
+  has_api_key: z.boolean(),
+})
+
 export type DataFrameResponse = z.infer<typeof dataFrameResponseSchema>
 export type LogResponse = z.infer<typeof logResponseSchema>
 export type TaskStatusResponse = z.infer<typeof taskStatusResponseSchema>
+export type JudgeConfig = z.infer<typeof judgeConfigSchema>
+export type JudgeConfigSaveResponse = z.infer<typeof judgeConfigSaveResponseSchema>

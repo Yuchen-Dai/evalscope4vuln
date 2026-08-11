@@ -8,7 +8,7 @@ from datetime import datetime
 from flask import Flask, jsonify, send_from_directory
 
 from evalscope.utils.logger import get_logger
-from .blueprints import bp_eval, bp_reports
+from .blueprints import bp_eval, bp_reports, bp_settings
 from .utils import OUTPUT_DIR as _DEFAULT_ROOT
 
 logger = get_logger()
@@ -30,6 +30,20 @@ def _monitor_active_processes(interval: float = 2.0):
                 except Exception:
                     pass
                 logger.info(f'[monitor] Task {task_id} finished, cleaned up.')
+        time.sleep(interval)
+
+
+def _monitor_fn_tasks(interval: float = 2.0):
+    """兜底清理已结束的 fn-advice 线程。
+
+    worker 自己 finally unregister，这里只兜底线程异常退出未清理的罕见场景。
+    """
+    from .utils.fn_advice_runner import list_active_fn_tasks, unregister
+    while True:
+        for task_id, (thread, _stop) in list_active_fn_tasks():
+            if not thread.is_alive():
+                unregister(task_id)
+                logger.info(f'[monitor] fn-advice task {task_id} finished, cleaned up.')
         time.sleep(interval)
 
 
@@ -71,6 +85,7 @@ def create_app(outputs: str = None):
     # Register blueprints
     app.register_blueprint(bp_eval)
     app.register_blueprint(bp_reports)
+    app.register_blueprint(bp_settings)
 
     @app.route('/health', methods=['GET'])
     def health_check():
@@ -163,6 +178,8 @@ def run_service(host: str = '0.0.0.0', port: int = 9000, debug: bool = False, ou
 
     # 启动 monitor 线程：周期清理已结束的异步任务子进程
     threading.Thread(target=_monitor_active_processes, daemon=True).start()
+    # fn-advice 线程清理（兜底）
+    threading.Thread(target=_monitor_fn_tasks, daemon=True).start()
     app.run(host=host, port=port, debug=debug, threaded=True)
 
 

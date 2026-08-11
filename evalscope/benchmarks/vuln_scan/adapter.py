@@ -160,7 +160,8 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         data = await client.get_report_data(pid, job_id)
         findings = data.get('findings') or []
         logger.info(f'[vuln_scan] ← 获取完成: {len(findings)} 个 finding')
-        return findings
+        # 返回 project_id/job_id 供 run_inference 持久化 → 后置 FN 漏报分析据此拉 sessions
+        return findings, pid, job_id
     finally:
         logger.info('[vuln_scan] 关闭图灵连接')
         await client.aclose()
@@ -220,8 +221,9 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         sp = scan_cfg.get('source_path', '')
         if sp and not os.path.isabs(sp):
             scan_cfg = {**scan_cfg, 'source_path': os.path.join(self._benchmark_meta.dataset_id, sp)}
-        raw_findings = _run_async(_scan_async(scan_cfg, project_name, model_name))
-        logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)}')
+        raw_findings, project_id, job_id = _run_async(_scan_async(scan_cfg, project_name, model_name))
+        logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)} '
+                    f'(project_id={project_id} job_id={job_id})')
 
         model_output = ModelOutput.from_content(
             model=model.name,
@@ -229,7 +231,14 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
                                ensure_ascii=False),
             stop_reason='stop',
         )
-        model_output.metadata = {'findings_raw': raw_findings, 'project_name': project_name}
+        # project_id/job_id 落 metadata → 随 prediction cache 持久化，供后置 FN 漏报分析
+        # 拉图灵 sessions（reports 蓝图 /fn-advice 读此字段）
+        model_output.metadata = {
+            'findings_raw': raw_findings,
+            'project_name': project_name,
+            'project_id': project_id,
+            'job_id': job_id,
+        }
         return TaskState(
             model=model.name,
             sample=sample,

@@ -9,4 +9,6 @@ export type {
   DataFrameResponse,
   LogResponse,
   TaskStatusResponse,
+  JudgeConfig,
+  JudgeConfigSaveResponse,
 } from '@/api/schemas/common.schema'
