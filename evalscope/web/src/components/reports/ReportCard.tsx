@@ -78,6 +78,21 @@ export default function ReportCard({ report, selected, onSelect, onClick }: Repo
             <span className="text-xs text-[var(--text-muted)] shrink-0">
               {t('reports.samples')}: {report.num_samples}
             </span>
+            {/* Vuln-mining summary (TP/FP/FN). Hidden on non-vuln / legacy reports. */}
+            {report.vuln_summary && (
+              <span
+                className="inline-flex items-center gap-1 text-xs font-mono tabular-nums shrink-0"
+                title={`${t('reports.vuln.tp')}: ${report.vuln_summary.tp}   ${t('reports.vuln.fp')}: ${report.vuln_summary.fp}   ${t('reports.vuln.fn')}: ${report.vuln_summary.fn}`}
+              >
+                <span className="text-[var(--text-muted)]">{report.vuln_summary.tp}</span>
+                <span className="text-[var(--text-dim)]">/</span>
+                <span className="text-[var(--text-muted)]">{report.vuln_summary.fp}</span>
+                <span className="text-[var(--text-dim)]">/</span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[var(--danger-bg)] text-[var(--danger)] font-semibold">
+                  {report.vuln_summary.fn}
+                </span>
+              </span>
+            )}
             {/* Status — keeps card fields consistent with the desktop table. */}
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--success-bg)] text-[var(--success)] shrink-0">
               {t('reports.status.completed')}

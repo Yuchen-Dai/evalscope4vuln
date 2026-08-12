@@ -66,6 +66,9 @@ export default function ReportsTable({
               {t('reports.columns.samples')}
             </th>
             <th scope="col" className="px-4 py-3 text-xs font-semibold text-[var(--text-muted)] text-right">
+              {t('reports.vuln.compact')}
+            </th>
+            <th scope="col" className="px-4 py-3 text-xs font-semibold text-[var(--text-muted)] text-right">
               {t('reports.columns.score')}
             </th>
             <th scope="col" className="px-4 py-3 text-xs font-semibold text-[var(--text-muted)]">
@@ -113,6 +116,24 @@ export default function ReportsTable({
                 </td>
                 <td className="px-4 py-3 text-[var(--text-muted)] text-right tabular-nums">
                   {report.num_samples}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {report.vuln_summary ? (
+                    <span
+                      className="inline-flex items-center gap-1 font-mono text-xs tabular-nums whitespace-nowrap"
+                      title={`${t('reports.vuln.tp')}: ${report.vuln_summary.tp}   ${t('reports.vuln.fp')}: ${report.vuln_summary.fp}   ${t('reports.vuln.fn')}: ${report.vuln_summary.fn}`}
+                    >
+                      <span className="text-[var(--text)]">{report.vuln_summary.tp}</span>
+                      <span className="text-[var(--text-dim)]">/</span>
+                      <span className="text-[var(--text-muted)]">{report.vuln_summary.fp}</span>
+                      <span className="text-[var(--text-dim)]">/</span>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-[var(--danger-bg)] text-[var(--danger)] font-semibold">
+                        {report.vuln_summary.fn}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-[var(--text-dim)] font-mono">{t('reports.vuln.none')}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <span

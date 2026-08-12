@@ -194,6 +194,40 @@ def _build_report_meta(report_name: str, root: str) -> dict:
     for r in report_list:
         dataset_scores[r.dataset_name] = round(r.score, 4) if r.score is not None else None
 
+    # Aggregate vuln-mining counts (TP/FP/FN) from the Overall/* metrics.
+    # Non-vuln reports lack these entries; vuln_summary stays None so the
+    # frontend degrades gracefully (shows '—' / hides the column).
+    def _overall_metric(r, suffix):
+        target = f'Overall/{suffix}'
+        for m in r.metrics:
+            if m.name == target:
+                return m.score
+        return None
+
+    tp_sum = fp_sum = fn_sum = 0.0
+    has_vuln = False
+    for r in report_list:
+        tp = _overall_metric(r, 'TP')
+        fp = _overall_metric(r, 'FP')
+        fn = _overall_metric(r, 'FN')
+        if tp is None and fp is None and fn is None:
+            continue
+        has_vuln = True
+        tp_sum += tp or 0.0
+        fp_sum += fp or 0.0
+        fn_sum += fn or 0.0
+
+    vuln_summary = None
+    if has_vuln:
+        denom = tp_sum + fn_sum
+        recall = round(tp_sum / denom, 4) if denom > 0 else 0.0
+        vuln_summary = {
+            'tp': int(tp_sum),
+            'fp': int(fp_sum),
+            'fn': int(fn_sum),
+            'recall': recall,
+        }
+
     return {
         'name': report_name,
         'model_name': first.model_name,
@@ -204,6 +238,7 @@ def _build_report_meta(report_name: str, root: str) -> dict:
         'dataset_scores': dataset_scores,
         'num_samples': total_num,
         'timestamp': timestamp,
+        'vuln_summary': vuln_summary,
         # keep individual scores for per-dataset filtering
         '_datasets': dataset_names,
         '_scores': [r.score for r in report_list],

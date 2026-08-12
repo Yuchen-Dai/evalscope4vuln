@@ -104,6 +104,14 @@ export const loadReportResponseSchema = z.object({
 // Report list / summary                                               //
 // ------------------------------------------------------------------ //
 
+/** Runtime contract for a vuln-mining summary (TP/FP/FN aggregated across datasets). */
+export const vulnSummarySchema = z.object({
+  tp: z.number(),
+  fp: z.number(),
+  fn: z.number(),
+  recall: z.number(),
+})
+
 /** Runtime contract for one report-list item. */
 export const reportSummarySchema = z.object({
   name: z.string(),
@@ -114,6 +122,9 @@ export const reportSummarySchema = z.object({
   dataset_scores: z.record(z.string(), z.number()).optional(),
   num_samples: z.number(),
   timestamp: z.string(),
+  // Vuln-mining counts. Absent on non-vuln reports / legacy data; the UI
+  // degrades gracefully (em-dash / hidden column) when this is missing/null.
+  vuln_summary: vulnSummarySchema.nullable().optional(),
 })
 
 /** Runtime contract for a paginated report list. */
@@ -422,6 +433,7 @@ export type PerfMetrics = z.infer<typeof perfMetricsSchema>
 export type ReportData = z.infer<typeof reportDataSchema>
 export type LoadReportResponse = z.infer<typeof loadReportResponseSchema>
 export type ReportSummary = z.infer<typeof reportSummarySchema>
+export type VulnSummary = z.infer<typeof vulnSummarySchema>
 export type ListReportsResponse = z.infer<typeof listReportsResponseSchema>
 export type ContentBlock = z.infer<typeof contentBlockSchema>
 export type ToolCall = z.infer<typeof toolCallSchema>

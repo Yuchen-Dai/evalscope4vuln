@@ -31,6 +31,13 @@ export const en: Dict = {
     score: 'Score',
     status: 'Status',
   },
+  vuln: {
+    compact: 'TP / FP / FN',
+    tp: 'Hits (TP)',
+    fp: 'False Positives (FP)',
+    fn: 'Missed (FN)',
+    none: '—',
+  },
   status: {
     completed: 'Completed',
   },
@@ -68,6 +75,13 @@ export const zh: Dict = {
     samples: '目标数',
     score: '分数',
     status: '状态',
+  },
+  vuln: {
+    compact: '命中/误报/漏报',
+    tp: '命中 (TP)',
+    fp: '误报 (FP)',
+    fn: '漏报 (FN)',
+    none: '—',
   },
   status: {
     completed: '已完成',

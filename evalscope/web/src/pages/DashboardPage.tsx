@@ -14,7 +14,7 @@ import EmptyStateSystem from '@/components/common/EmptyStateSystem'
 import SearchInput from '@/components/ui/SearchInput'
 import Pagination from '@/components/ui/Pagination'
 import ErrorAlert from '@/components/ui/ErrorAlert'
-import { FileText, Cpu, Clock, ChevronRight } from 'lucide-react'
+import { FileText, Cpu, Clock, ChevronRight, Target, ShieldAlert } from 'lucide-react'
 
 // Number of recent runs shown before pagination.
 const RECENT_LIMIT = 15
@@ -107,12 +107,26 @@ export default function DashboardPage() {
 
   const kpi = useMemo(() => {
     const models = new Set<string>()
-    reports.forEach((r) => models.add(r.model_name))
+    // Vuln-mining aggregation: only reports carrying vuln_summary contribute.
+    // Non-vuln / legacy reports are skipped so the KPIs degrade to hidden.
+    const vulnReports = reports.filter((r) => r.vuln_summary)
+    let totalFn = 0
+    let recallSum = 0
+    reports.forEach((r) => {
+      models.add(r.model_name)
+      if (r.vuln_summary) {
+        totalFn += r.vuln_summary.fn
+        recallSum += r.vuln_summary.recall
+      }
+    })
     const latestTs = reports.reduce((m, r) => ((r.timestamp || '').localeCompare(m) > 0 ? r.timestamp || '' : m), '')
     return {
       evals: reports.length,
       models: models.size,
       latest: latestTs ? formatShort(latestTs) : t('dashboard.neverText'),
+      hasVuln: vulnReports.length > 0,
+      totalFn,
+      avgRecall: vulnReports.length ? recallSum / vulnReports.length : null,
     }
   }, [reports, t])
 
@@ -161,6 +175,26 @@ export default function DashboardPage() {
             gradient="var(--kpi-grad-3)"
             delay={180}
           />
+          {/* Vuln-dimension KPIs — only rendered when at least one run exposes
+              vuln_summary (TP/FP/FN). Hidden on non-vuln / legacy installations. */}
+          {kpi.hasVuln && (
+            <KpiCard
+              icon={<Target size={18} strokeWidth={2} />}
+              value={kpi.avgRecall != null ? `${Math.round(kpi.avgRecall * 100)}%` : t('dashboard.neverText')}
+              label={t('dashboard.avgRecall')}
+              gradient="var(--kpi-grad-1)"
+              delay={210}
+            />
+          )}
+          {kpi.hasVuln && (
+            <KpiCard
+              icon={<ShieldAlert size={18} strokeWidth={2} />}
+              value={String(kpi.totalFn)}
+              label={t('dashboard.totalMissed')}
+              gradient="var(--kpi-grad-2)"
+              delay={240}
+            />
+          )}
         </div>
       )}
 

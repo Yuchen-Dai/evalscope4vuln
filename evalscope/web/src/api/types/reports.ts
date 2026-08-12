@@ -15,6 +15,7 @@ export type {
   LoadReportResponse,
   // Report list / summary
   ReportSummary,
+  VulnSummary,
   ListReportsResponse,
   // Prediction rows (chat messages + agent trace)
   ContentBlock,

@@ -19,6 +19,8 @@ export const en: Dict = {
   filter_all: 'All',
   filter_eval: 'Eval',
   noMatch: 'No matching runs',
+  avgRecall: 'Avg Recall',
+  totalMissed: 'Total Missed',
 }
 
 export const zh: Dict = {
@@ -40,4 +42,6 @@ export const zh: Dict = {
   filter_all: '全部',
   filter_eval: '评测',
   noMatch: '无匹配的运行记录',
+  avgRecall: '平均召回',
+  totalMissed: '总漏报',
 }
