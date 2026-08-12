@@ -418,21 +418,12 @@ def get_evaluation_log():
 
 @bp_eval.route('/benchmarks', methods=['GET'])
 def list_benchmarks():
-    """Return the catalogue of supported benchmarks with descriptions.
+    """Return the catalogue of supported vulnerability-discovery benchmarks.
 
-    The list is split into two categories: ``text`` (LLM-only) and
-    ``multimodal`` (VLM).  Descriptions are loaded from the ``_meta`` JSON
-    files and post-processed: the H1 title and the last H2 section are
-    stripped, then the remainder is split into per-section blocks.
-
-    The default catalogue can be overridden at application startup by setting
-    ``app.config['SUPPORTED_BENCHMARKS']`` to a dict with keys ``'text'`` and
-    ``'multimodal'``, each containing a list of benchmark names.
-
-    Query params:
-        type (str, optional): Filter to ``'text'`` or ``'multimodal'`` only.
-        all (str, optional): When ``'true'``, return *all* benchmarks discovered
-            from the ``_meta`` directory instead of the curated default lists.
+    Only benchmarks registered with a ``vuln_`` prefix in ``BENCHMARK_REGISTRY``
+    are exposed. They are returned under the ``text`` bucket (``multimodal`` is
+    always empty) to keep the legacy two-bucket response shape the frontend
+    expects. Each entry is built from the registry's ``BenchmarkMeta``.
     """
     try:
         # 动态：返回所有 vuln_* benchmark（从注册表，category=llm → text 桶）

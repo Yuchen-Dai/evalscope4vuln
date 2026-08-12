@@ -252,7 +252,6 @@ export default function ReportDetailPage() {
               reportName={reportName}
               datasetName={activeDataset}
               rootPath={rootPath}
-              perfMetrics={reportList.find((r) => r.dataset_name === activeDataset)?.perf_metrics}
               overallScore={
                 (() => {
                   const r = reportList.find((x) => x.dataset_name === activeDataset)

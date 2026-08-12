@@ -8,14 +8,11 @@ import { scoreColor } from '@/utils/colorScale'
 import { formatMetricByKey, getBoundedMetricRatio } from '@/domain/metric/registry'
 import MarkdownRenderer from '@/components/common/MarkdownRenderer'
 import Skeleton from '@/components/ui/Skeleton'
-import PerfMetricsPanel from '@/components/reports/PerfMetricsPanel'
-import type { PerfMetrics } from '@/api/types'
 
 interface Props {
   reportName: string
   datasetName: string
   rootPath: string
-  perfMetrics?: PerfMetrics | null
   onSubsetClick?: (subset: string) => void
   overallScore?: number
   metricName?: string
@@ -24,7 +21,7 @@ interface Props {
 
 const LOC_ONLY_PREFIX = 'LocOnly/'
 
-export default function DetailsTab({ reportName, datasetName, rootPath, perfMetrics, onSubsetClick, overallScore, metricName = 'score', regime = 'type' }: Props) {
+export default function DetailsTab({ reportName, datasetName, rootPath, onSubsetClick, overallScore, metricName = 'score', regime = 'type' }: Props) {
   const { t } = useLocale()
   const [analysis, setAnalysis] = useState('')
   const [analysisLoading, setAnalysisLoading] = useState(false)
@@ -204,13 +201,6 @@ export default function DetailsTab({ reportName, datasetName, rootPath, perfMetr
       </Card>
 
       {/* Score Distribution Chart removed - info already visible in Subset Scores table */}
-
-      {/* Performance Metrics */}
-      {perfMetrics && (
-        <Card title={t('reportDetail.perfMetrics')}>
-          <PerfMetricsPanel perfMetrics={perfMetrics} />
-        </Card>
-      )}
     </div>
   )
 }

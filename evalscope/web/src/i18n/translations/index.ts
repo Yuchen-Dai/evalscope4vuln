@@ -15,7 +15,6 @@ import * as reportDetail from './reportDetail'
 import * as metrics from './metrics'
 import * as compare from './compare'
 import * as dashboard from './dashboard'
-import * as tasks from './tasks'
 import * as tabs from './tabs'
 import * as form from './form'
 import * as empty from './empty'
@@ -38,7 +37,6 @@ const en: Dict = {
   metrics: metrics.en,
   compare: compare.en,
   dashboard: dashboard.en,
-  tasks: tasks.en,
   tabs: tabs.en,
   form: form.en,
   empty: empty.en,
@@ -60,7 +58,6 @@ const zh: Dict = {
   metrics: metrics.zh,
   compare: compare.zh,
   dashboard: dashboard.zh,
-  tasks: tasks.zh,
   tabs: tabs.zh,
   form: form.zh,
   empty: empty.zh,

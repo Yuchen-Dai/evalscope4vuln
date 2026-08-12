@@ -3,51 +3,11 @@
 import re
 from typing import Any, Dict, List, Optional
 
-from evalscope.utils.resource_utils import BENCHMARK_META_DIR, load_benchmark_data
+from evalscope.utils.resource_utils import load_benchmark_data
 
 # ---------------------------------------------------------------------------
 # Supported benchmark catalogue
 # ---------------------------------------------------------------------------
-
-#: Default text-only benchmarks exposed by the /api/v1/eval/benchmarks endpoint.
-DEFAULT_TEXT_BENCHMARKS: List[str] = [
-    'gsm8k',
-    'mmlu',
-    'cmmlu',
-    'ceval',
-    'arc',
-    'math_500',
-    'aime24',
-    'aime25',
-    'aime26',
-    'gpqa_diamond',
-    'super_gpqa',
-    'commonsense_qa',
-    'piqa',
-    'siqa',
-    'logi_qa',
-    'qasc',
-    'sciq',
-    'race',
-    'mgsm',
-    'multi_if',
-    'ifeval',
-    'ifbench',
-]
-
-#: Default multimodal benchmarks exposed by the /api/v1/eval/benchmarks endpoint.
-DEFAULT_MULTIMODAL_BENCHMARKS: List[str] = [
-    'mmmu',
-    'cmmmu',
-    'mmmu_pro',
-    'mm_bench',
-    'chartqa',
-    'ai2d',
-    'real_world_qa',
-    'math_vista',
-    'math_vision',
-    'seed_bench_2_plus',
-]
 
 #: 漏洞挖掘测评 benchmark（Benchmarks 页只显示这些白名单）。
 VULN_BENCHMARKS: List[str] = [
@@ -163,13 +123,6 @@ def parse_benchmark_description(readme_content: str) -> Dict[str, Any]:
         sections[current_title] = '\n'.join(current_lines).strip()
 
     return {'full': full_content, 'sections': sections}
-
-
-def discover_all_benchmarks() -> List[str]:
-    """Scan the ``_meta`` directory and return all benchmark names found."""
-    if not BENCHMARK_META_DIR.exists():
-        return []
-    return sorted(p.stem for p in BENCHMARK_META_DIR.glob('*.json'))
 
 
 def build_benchmark_entry(name: str) -> Dict[str, Any]:

@@ -14,12 +14,10 @@ export const en: Dict = {
   welcomeDesc: 'Enter an output directory path and scan to get started',
   searchPlaceholder: 'Search models or datasets...',
   runs: 'runs',
-  totalPerfRuns: 'Performance Runs',
   latestRun: 'Latest Run',
   recentRuns: 'Recent Runs',
   filter_all: 'All',
   filter_eval: 'Eval',
-  filter_perf: 'Perf',
   noMatch: 'No matching runs',
 }
 
@@ -37,11 +35,9 @@ export const zh: Dict = {
   welcomeDesc: '输入输出目录路径并扫描即可开始',
   searchPlaceholder: '搜索模型或数据集...',
   runs: '次评估',
-  totalPerfRuns: '性能压测',
   latestRun: '最近运行',
   recentRuns: '最近运行',
   filter_all: '全部',
   filter_eval: '评测',
-  filter_perf: '压测',
   noMatch: '无匹配的运行记录',
 }

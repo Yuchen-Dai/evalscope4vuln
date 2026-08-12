@@ -9,10 +9,8 @@
  * `formatMetric` primitive. This guarantees that the same metric renders with
  * identical precision, rounding and units on every view.
  *
- * Specs are grouped by domain (evaluation vs performance) so ownership stays
- * clear, then merged into a single `METRIC_REGISTRY` for resolution. The display
- * form of each metric is decided from its spec metadata, never inferred from the
- * magnitude of a value.
+ * The display form of each metric is decided from its spec metadata, never
+ * inferred from the magnitude of a value.
  */
 
 import type { FormattedMetric } from './metricFormat'
@@ -103,121 +101,22 @@ export const EVALUATION_METRIC_SPECS: MetricRegistry = {
 }
 
 /**
- * Performance-domain metrics.
- *
- * These are Unbounded_Metrics: they keep their native unit and are never
- * converted to a percentage regardless of magnitude. Latency
- * metrics are `lower-is-better`; throughput metrics are `higher-is-better`.
- * Units are stored as their literal display string (e.g. `'ms'`, `'tokens/s'`)
- * so they render correctly even without a dedicated locale entry, while still
- * being localizable through the translate function.
- */
-export const PERFORMANCE_METRIC_SPECS: MetricRegistry = {
-  latency: {
-    key: 'latency',
-    labelKey: 'metrics.latency',
-    boundedness: 'unbounded',
-    direction: 'lower-is-better',
-    unit: 's',
-    rawPrecision: 2,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  ttft: {
-    key: 'ttft',
-    labelKey: 'metrics.ttft',
-    boundedness: 'unbounded',
-    direction: 'lower-is-better',
-    unit: 's',
-    rawPrecision: 3,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  tpot: {
-    key: 'tpot',
-    labelKey: 'metrics.tpot',
-    boundedness: 'unbounded',
-    direction: 'lower-is-better',
-    unit: 's',
-    rawPrecision: 4,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  ttft_ms: {
-    key: 'ttft_ms',
-    labelKey: 'metrics.ttft',
-    boundedness: 'unbounded',
-    direction: 'lower-is-better',
-    unit: 'ms',
-    rawPrecision: 2,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  tpot_ms: {
-    key: 'tpot_ms',
-    labelKey: 'metrics.tpot',
-    boundedness: 'unbounded',
-    direction: 'lower-is-better',
-    unit: 'ms',
-    rawPrecision: 2,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  throughput: {
-    key: 'throughput',
-    labelKey: 'metrics.throughput',
-    boundedness: 'unbounded',
-    direction: 'higher-is-better',
-    unit: 'tokens/s',
-    rawPrecision: 2,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  rps: {
-    key: 'rps',
-    labelKey: 'metrics.rps',
-    boundedness: 'unbounded',
-    direction: 'higher-is-better',
-    unit: 'req/s',
-    rawPrecision: 2,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  tokens: {
-    key: 'tokens',
-    labelKey: 'metrics.tokens',
-    boundedness: 'unbounded',
-    direction: 'higher-is-better',
-    unit: 'tokens',
-    rawPrecision: 0,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-  },
-  // Success rate is a Bounded_Ratio_Metric stored as 0-100 (e.g. `100` for
-  // 100%). It renders as a percentage primary so the same value rounds
-  // identically across the list, detail and per-run views.
-  success_rate: {
-    key: 'success_rate',
-    labelKey: 'metrics.success_rate',
-    boundedness: 'bounded',
-    direction: 'higher-is-better',
-    unit: null,
-    rawPrecision: DEFAULT_RAW_PRECISION,
-    percentPrecision: DEFAULT_PERCENT_PRECISION,
-    storedAsHundred: true,
-  },
-}
-
-/**
- * The merged, application-wide metric registry. Evaluation and performance
- * specs are combined into a single lookup table so any surface can resolve a
- * metric by its key through one entry point.
+ * The merged, application-wide metric registry. All evaluation specs are
+ * combined into a single lookup table so any surface can resolve a metric by
+ * its key through one entry point.
  */
 export const METRIC_REGISTRY: MetricRegistry = {
   ...EVALUATION_METRIC_SPECS,
-  ...PERFORMANCE_METRIC_SPECS,
 }
 
 /**
  * Alias map from common backend/UI spellings to canonical registry keys.
  *
  * Keys are normalized (lower-cased, non-alphanumeric characters collapsed to
- * `_`) before lookup, so variants such as `Average Accuracy`, `pass@1`,
- * `Output TPS` or `TTFT` all resolve to a single canonical spec. Anything not
- * listed here (and not a direct registry key) falls through to the default
- * fallback spec, preserving the "undefined display form" contract.
+ * `_`) before lookup, so variants such as `Average Accuracy`, `pass@1` or
+ * `Overall/F1` all resolve to a single canonical spec. Anything not listed
+ * here (and not a direct registry key) falls through to the default fallback
+ * spec, preserving the "undefined display form" contract.
  */
 const METRIC_ALIASES: Record<string, string> = {
   acc: 'accuracy',
@@ -246,44 +145,6 @@ const METRIC_ALIASES: Record<string, string> = {
   temporal_f1: 'f1',
   task_averaged_f1: 'f1',
   overall_f1: 'f1',
-  avg_latency: 'latency',
-  avglatency: 'latency',
-  average_latency: 'latency',
-  average_latency_s: 'latency',
-  p50_latency_s: 'latency',
-  p90_latency_s: 'latency',
-  p95_latency_s: 'latency',
-  p99_latency_s: 'latency',
-  avg_ttft_ms: 'ttft_ms',
-  p99_ttft_ms: 'ttft_ms',
-  avg_tpot_ms: 'tpot_ms',
-  p99_tpot_ms: 'tpot_ms',
-  time_to_first_token: 'ttft',
-  average_ttft_s: 'ttft',
-  time_per_output_token: 'tpot',
-  average_tpot_s: 'tpot',
-  output_tps: 'throughput',
-  outputtps: 'throughput',
-  average_output_tps: 'throughput',
-  averageoutputtps: 'throughput',
-  tps: 'throughput',
-  gen_throughput: 'throughput',
-  output_throughput_tokens_s: 'throughput',
-  req_per_sec: 'rps',
-  reqpersec: 'rps',
-  requests_per_second: 'rps',
-  request_throughput_req_s: 'rps',
-  total_tokens: 'tokens',
-  total_model_input_tokens: 'tokens',
-  total_model_output_tokens: 'tokens',
-  output_tokens: 'tokens',
-  input_tokens: 'tokens',
-  total_wall_time_s: 'latency',
-  total_model_time_s: 'latency',
-  total_tool_time_s: 'latency',
-  total_other_time_s: 'latency',
-  successrate: 'success_rate',
-  success: 'success_rate',
   weighted_score_percent: 'score_percent',
   weightedscorepercent: 'score_percent',
 }
