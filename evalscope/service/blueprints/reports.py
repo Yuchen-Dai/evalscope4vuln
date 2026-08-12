@@ -790,6 +790,94 @@ def trace_for_finding():
         return jsonify({'error': str(e)}), 500
 
 
+# 跨模型轨迹对比：sessions 按 (project_id, job_id) 缓存——同一 report 的多个 gt 共享
+# 同一份 job sessions，避免 N 模型 × M 漏洞 的 N×M 次图灵调用。sessions 不随时间变化。
+_SESSIONS_CACHE: dict[tuple[str, str], tuple[float, list]] = {}
+_SESSIONS_TTL = 600  # 秒
+
+
+def _get_sessions_cached(pid: str, jid: str, base_url: str) -> list:
+    """按 (pid,jid) 缓存图灵 job sessions（带 TTL）。"""
+    import time
+    key = (pid, jid)
+    now = time.time()
+    hit = _SESSIONS_CACHE.get(key)
+    if hit and now - hit[0] < _SESSIONS_TTL:
+        return hit[1]
+
+    async def _fetch():
+        client = TuringClient(base_url=base_url)
+        try:
+            await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
+            return await client.get_job_sessions(pid, jid)
+        finally:
+            await client.aclose()
+
+    sessions = (_run_async(_fetch()) or {}).get('sessions') or []
+    _SESSIONS_CACHE[key] = (now, sessions)
+    return sessions
+
+
+@bp_reports.route('/compare/trace', methods=['POST'])
+def compare_trace():
+    """跨模型挖掘轨迹对比：同一 gt_id 下各 report 的挖掘轨迹（前端并排对照用）。
+
+    body: {root_path?, report_names: [...], dataset_name, gt_id}
+    per-report: vuln_match.type.matches 找 gt_id→finding_id；finding_id→task_id 从 sessions 反查
+    （findings_raw 无 task_id）→ sessions_to_trajectory。
+    返回 {gt_id, runs:[{report_name, display_label, status: tp|fn|unavailable, trajectory?, reason?}]}。
+    纯展示，无 LLM；FP 无 gt 锚点不纳入。
+    """
+    body = request.get_json(silent=True) or {}
+    root = body.get('root_path') or _root_path()
+    report_names = body.get('report_names') or []
+    dataset_name = body.get('dataset_name')
+    gt_id = body.get('gt_id')
+    if not report_names or not dataset_name or not gt_id:
+        return jsonify({'error': 'report_names, dataset_name, gt_id are required'}), 400
+    try:
+        runs: list[dict] = []
+        for name in report_names:
+            run: dict = {'report_name': name}
+            try:
+                prefix, model_name, _ds = process_report_name(name)
+                run['display_label'] = model_name or name
+                work_dir = os.path.join(root, prefix)
+                meta = get_vuln_scan_meta(work_dir, model_name, dataset_name)
+            except Exception as e:
+                runs.append({**run, 'status': 'unavailable', 'reason': f'读取报告失败: {e}'})
+                continue
+            pid, jid = meta.get('project_id'), meta.get('job_id')
+            vm = meta.get('vuln_match') or {}
+            vtype = vm.get('type') or {}
+            matches = vtype.get('matches') or []
+            missed = vtype.get('missed_gt') or []
+            hit = next((m for m in matches if m.get('gt_id') == gt_id), None)
+            if not pid or not jid:
+                runs.append({**run, 'status': 'unavailable',
+                             'reason': '该报告无 project_id/job_id（老报告，需重跑评测）'})
+            elif hit:
+                finding_id = hit.get('finding_id')
+                base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
+                sessions = _get_sessions_cached(pid, jid, base_url)
+                info = trace_view.extract_finding_task_map(sessions).get(finding_id) or {}
+                gt_list = vm.get('gt') or []
+                gt_vuln_type = next((g.get('vuln_type') for g in gt_list if g.get('gt_id') == gt_id), None) \
+                    or info.get('vuln_type')
+                traj = trace_view.sessions_to_trajectory(
+                    sessions, info.get('task_id'), finding_id, gt_vuln_type,
+                    info.get('detection_id'), info.get('detection_source_task_id'))
+                runs.append({**run, 'status': 'tp', 'trajectory': traj})
+            elif gt_id in missed:
+                runs.append({**run, 'status': 'fn', 'reason': '该模型未挖到此漏洞（漏报）'})
+            else:
+                runs.append({**run, 'status': 'unavailable', 'reason': '该报告数据集无此 gt'})
+        return jsonify({'gt_id': gt_id, 'runs': runs}), 200
+    except Exception as e:
+        logger.error(f'compare/trace failed: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 @bp_reports.route('/html', methods=['GET'])
 def get_html_report():
     """Serve the HTML report file for a given report.

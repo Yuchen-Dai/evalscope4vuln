@@ -391,6 +391,24 @@ export const trajectorySchema = z.object({
 }).passthrough()
 
 export type Trajectory = z.infer<typeof trajectorySchema>
+
+/** POST /compare/trace：跨模型同一 gt 的挖掘轨迹对比（每 report 一 run）。 */
+export const trajectoryCompareRunSchema = z.object({
+  report_name: z.string(),
+  display_label: z.string().optional(),
+  status: z.enum(['tp', 'fn', 'unavailable']),
+  trajectory: trajectorySchema.optional(),
+  reason: z.string().optional(),
+}).passthrough()
+
+export const trajectoryCompareSchema = z.object({
+  gt_id: z.string(),
+  runs: z.array(trajectoryCompareRunSchema),
+}).passthrough()
+
+export type TrajectoryCompare = z.infer<typeof trajectoryCompareSchema>
+export type TrajectoryCompareRun = z.infer<typeof trajectoryCompareRunSchema>
+
 export type TraceStep = z.infer<typeof traceStepSchema>
 export type TraceStage = z.infer<typeof traceStageSchema>
 export type TraceStats = z.infer<typeof traceStatsSchema>

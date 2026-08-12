@@ -24,34 +24,38 @@ function fmtDuration(ms?: number | null): string {
   return `${Math.floor(ms / 60000)}m${Math.round((ms % 60000) / 1000)}s`
 }
 
-export default function TrajectoryView({ trajectory }: { trajectory: Trajectory }) {
+export default function TrajectoryView({ trajectory, variant = 'full' }: { trajectory: Trajectory; variant?: 'full' | 'stages' }) {
   const { stages, stats } = trajectory
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 统计磁贴 */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-        <Stat label="步数" value={stats.total_steps} />
-        <Stat label="工具调用" value={stats.tool_calls} />
-        <Stat label="思考" value={stats.thoughts} />
-        <Stat label="耗时" value={fmtDuration(stats.duration_ms)} />
-        <Stat label="Token" value={(stats.tokens_input + stats.tokens_output).toLocaleString()} />
-        <Stat label="结论" value={stats.conclusions} />
-      </div>
+      {variant === 'full' && (
+        <>
+          {/* 统计磁贴 */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+            <Stat label="步数" value={stats.total_steps} />
+            <Stat label="工具调用" value={stats.tool_calls} />
+            <Stat label="思考" value={stats.thoughts} />
+            <Stat label="耗时" value={fmtDuration(stats.duration_ms)} />
+            <Stat label="Token" value={(stats.tokens_input + stats.tokens_output).toLocaleString()} />
+            <Stat label="结论" value={stats.conclusions} />
+          </div>
 
-      {/* 工具分布 */}
-      {stats.tool_distribution && Object.keys(stats.tool_distribution).length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-          <span>工具分布:</span>
-          {Object.entries(stats.tool_distribution).map(([k, v]) => (
-            <span key={k} className="px-2 py-0.5 rounded bg-[var(--bg-card2)] border border-[var(--border)]">
-              {k} ×{v}
-            </span>
-          ))}
-        </div>
+          {/* 工具分布 */}
+          {stats.tool_distribution && Object.keys(stats.tool_distribution).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+              <span>工具分布:</span>
+              {Object.entries(stats.tool_distribution).map(([k, v]) => (
+                <span key={k} className="px-2 py-0.5 rounded bg-[var(--bg-card2)] border border-[var(--border)]">
+                  {k} ×{v}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <Legend />
+        </>
       )}
-
-      <Legend />
 
       {/* 阶段轨迹（固定 5 阶段，可折叠，空阶段显示解释） */}
       {(['preprocess', 'detect', 'mine', 'deepmine', 'verify'] as const).map((stage) => (

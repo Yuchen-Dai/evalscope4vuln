@@ -3,6 +3,7 @@ import { useLocale } from '@/contexts/LocaleContext'
 import { useReports } from '@/contexts/ReportsContext'
 import { useQueryParams } from '@/hooks/useQueryParams'
 import { getPredictions, getChartUrl } from '@/api/reports'
+import TraceCompareTab from '@/components/reports/TraceCompareTab'
 import type { ReportData, PredictionRow } from '@/api/types'
 import { getDisplayNames, parseReportName } from '@/utils/reportParser'
 import { buildDisplayLabel, compatibilityReason } from '@/domain/compare/compareModel'
@@ -86,7 +87,7 @@ export default function ComparePage() {
 
   // State
   const [reports, setReports] = useState<ReportData[]>([])
-  const [activeTab, setActiveTab] = useState<'score' | 'prediction'>('score')
+  const [activeTab, setActiveTab] = useState<'score' | 'prediction' | 'trace'>('score')
   const [dataLoaded, setDataLoaded] = useState(false)
   const [scoreLoadError, setScoreLoadError] = useState('')
   const [scoreReloadToken, setScoreReloadToken] = useState(0)
@@ -436,9 +437,10 @@ export default function ComparePage() {
         tabs={[
           { key: 'score', label: t('compare.scoreComparison'), panelId: 'compare-score-panel' },
           { key: 'prediction', label: t('compare.predictionComparison'), panelId: 'compare-prediction-panel' },
+          { key: 'trace', label: '挖掘轨迹对比', panelId: 'compare-trace-panel' },
         ]}
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'score' | 'prediction')}
+        onChange={(k) => setActiveTab(k as 'score' | 'prediction' | 'trace')}
         panels={{
           'compare-score-panel': loading && !dataLoaded ? (
             <div className="flex flex-col gap-4">
@@ -487,6 +489,13 @@ export default function ComparePage() {
               predictionsError={predictionsError}
               onRetryPredictions={() => setPredictionsReloadToken((value) => value + 1)}
               t={t}
+            />
+          ),
+          'compare-trace-panel': (
+            <TraceCompareTab
+              reportNames={reportNames}
+              rootPath={rootPath}
+              displayLabels={displayLabels}
             />
           ),
         }}

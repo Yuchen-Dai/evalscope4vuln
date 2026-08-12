@@ -266,3 +266,47 @@ def sessions_to_trajectory(sessions: list[dict], task_id: str | None,
         'tool_distribution': dict(sorted(tool_counter.items(), key=lambda x: -x[1])),
     }
     return {'stages': stages, 'stats': stats, 'story': _extract_story(stages)}
+
+
+def extract_finding_task_map(sessions: list[dict]) -> dict[str, dict]:
+    """从 mining sessions 的 submit_artifact(finding) 提取 finding_id→任务信息映射。
+
+    findings_raw 不含 task_id，跨模型轨迹对比需按 finding_id 反查其挖掘 task_id /
+    detection 关联，必须从 sessions 提取。返回：
+    ``{finding_id: {task_id, detection_id, detection_source_task_id, vuln_type}}``。
+    逻辑同 demo 期的 extract_findings_from_sessions，但返回映射（对比端点按 finding_id 查）。
+    """
+    fmap: dict[str, dict] = {}
+    for s in sessions or []:
+        if not (s.get('task_type') or '').startswith('mining'):
+            continue
+        parts = ((s.get('session') or {}).get('parts') or [])
+        for p in parts:
+            if not isinstance(p, dict) or p.get('type') != 'tool':
+                continue
+            name = str(p.get('tool') or p.get('name') or '').lower()
+            if 'submit_artifact' not in name and 'submit' not in name:
+                continue
+            inp = p.get('input') or p.get('args') or {}
+            if not isinstance(inp, dict) or inp.get('artifact_type') != 'finding':
+                continue
+            data = inp.get('data') if isinstance(inp.get('data'), dict) else inp
+            out_raw = p.get('output') or p.get('result')
+            out: dict = {}
+            if isinstance(out_raw, str):
+                try:
+                    out = json.loads(out_raw)
+                except Exception:
+                    out = {}
+            elif isinstance(out_raw, dict):
+                out = out_raw
+            fid = out.get('artifact_id') or data.get('finding_id')
+            if not fid:
+                continue
+            fmap[fid] = {
+                'task_id': s.get('task_id'),
+                'detection_id': data.get('detection_id'),
+                'detection_source_task_id': data.get('detection_source_task_id'),
+                'vuln_type': data.get('vuln_type'),
+            }
+    return fmap

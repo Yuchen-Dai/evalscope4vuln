@@ -34,6 +34,8 @@ export type {
   FnAdviceStopResponse,
   // 挖掘轨迹展示
   Trajectory,
+  TrajectoryCompare,
+  TrajectoryCompareRun,
   TraceStep,
   TraceStage,
   TraceStats,

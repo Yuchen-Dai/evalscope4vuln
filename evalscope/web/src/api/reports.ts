@@ -11,6 +11,7 @@ import {
   loadReportResponseSchema,
   predictionsResponseSchema,
   scanResponseSchema,
+  trajectoryCompareSchema,
   trajectorySchema,
 } from './schemas'
 import type {
@@ -26,6 +27,7 @@ import type {
   PredictionsResponse,
   ScanResponse,
   Trajectory,
+  TrajectoryCompare,
 } from './types'
 
 const BASE = '/api/v1/reports'
@@ -228,6 +230,15 @@ export async function getTraceForFinding(
     },
     signal,
   })
+}
+
+/** 跨模型同一 gt_id 的挖掘轨迹对比（并排对照用）。 */
+export async function compareTrajectory(
+  rootPath: string, reportNames: string[], datasetName: string, gtId: string, signal?: AbortSignal,
+): Promise<TrajectoryCompare> {
+  return apiPostValidated(`${BASE}/compare/trace`, {
+    root_path: rootPath, report_names: reportNames, dataset_name: datasetName, gt_id: gtId,
+  }, trajectoryCompareSchema, { signal })
 }
 
 export function getHtmlReportUrl(rootPath: string, reportName: string): string {
