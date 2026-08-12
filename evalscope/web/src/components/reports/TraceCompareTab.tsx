@@ -5,6 +5,7 @@
  * 对齐轴 = gt_id；FP 无 gt 锚点不纳入。
  */
 import { useEffect, useMemo, useState } from 'react'
+import { useLocale } from '@/contexts/LocaleContext'
 import { getPredictions, compareTrajectory } from '@/api/reports'
 import { useReports } from '@/contexts/ReportsContext'
 import { isDomainError } from '@/api/errors'
@@ -35,6 +36,7 @@ function readGt(pred: unknown): GtItem[] {
 }
 
 export default function TraceCompareTab({ reportNames, rootPath, displayLabels }: Props) {
+  const { t } = useLocale()
   const { reportCache } = useReports()
   const [dataset, setDataset] = useState('')
   const [gtList, setGtList] = useState<GtItem[]>([])
@@ -106,14 +108,14 @@ export default function TraceCompareTab({ reportNames, rootPath, displayLabels }
   }, [selectedGt, dataset, rootPath, reportNames])
 
   if (!commonVulnDs.length) {
-    return <div className="text-sm text-[var(--text-muted)] p-4">这些报告无共同的 vuln_ 数据集，无法对比挖掘轨迹。</div>
+    return <div className="text-sm text-[var(--text-muted)] p-4">{t('trace.noCommonVuln')}</div>
   }
   if (loading) return <Skeleton lines={6} />
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-[var(--text-muted)]">数据集</span>
+        <span className="text-[var(--text-muted)]">{t('trace.dataset')}</span>
         <select value={dataset} onChange={(e) => setDataset(e.target.value)}
           className="px-2 py-1 rounded border border-[var(--border)] bg-[var(--bg-card)] text-sm">
           {commonVulnDs.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -121,7 +123,7 @@ export default function TraceCompareTab({ reportNames, rootPath, displayLabels }
       </div>
       {error && <ErrorAlert>{error}</ErrorAlert>}
       {!gtList.length ? (
-        <div className="text-sm text-[var(--text-muted)] p-4">无 gt（漏洞）数据</div>
+        <div className="text-sm text-[var(--text-muted)] p-4">{t('trace.noGtData')}</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3">
           {/* 左：gt 列表 */}
@@ -135,7 +137,7 @@ export default function TraceCompareTab({ reportNames, rootPath, displayLabels }
                     <span className="text-xs font-mono text-[var(--text-muted)] truncate">{g.gt_id}</span>
                     {g.severity && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)]">{g.severity}</span>}
                   </div>
-                  <div className="text-sm truncate">{g.title || g.vuln_type || '(无标题)'}</div>
+                  <div className="text-sm truncate">{g.title || g.vuln_type || t('trace.untitled')}</div>
                   <div className="text-xs text-[var(--text-muted)] truncate">{g.vuln_type}</div>
                   {/* 各模型命中徽标 */}
                   <div className="flex items-center gap-1 mt-1">
@@ -156,7 +158,7 @@ export default function TraceCompareTab({ reportNames, rootPath, displayLabels }
             {traceLoading ? <Skeleton lines={8} /> : compare ? (
               <TrajectoryCompareView runs={compare.runs} displayLabels={displayLabels} />
             ) : (
-              <div className="text-sm text-[var(--text-muted)]">从左侧选择漏洞查看挖掘轨迹对比</div>
+              <div className="text-sm text-[var(--text-muted)]">{t('trace.selectGtHint')}</div>
             )}
           </div>
         </div>

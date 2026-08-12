@@ -3,7 +3,7 @@ import type { Dict } from './types'
 export const en: Dict = {
   title: 'Compare Models',
   scoreComparison: 'Score Comparison',
-  predictionComparison: 'Prediction Comparison',
+  predictionComparison: 'Result Comparison',
   selectedModels: 'Selected Models',
   addModel: 'Add',
   cancelAdd: 'Cancel adding a report',
@@ -13,7 +13,7 @@ export const en: Dict = {
   allAbove: 'All Above',
   allBelow: 'All Below',
   showing: 'Showing',
-  predictions: 'predictions',
+  predictions: 'results',
   needTwo: 'Select at least 2 reports to compare',
   noCommon: 'No common datasets found',
   incompatible: 'Selected runs may not be comparable',
@@ -26,14 +26,15 @@ export const en: Dict = {
   filterByModel: 'Filter',
   any: 'Any',
   maxThreeHint: 'Up to 3 models can be compared.',
-  sample: 'Sample',
+  sample: 'Target',
   maxThreeSelected: 'Only the first 3 will be compared.',
+  trajectoryComparison: 'Trajectory Comparison',
 }
 
 export const zh: Dict = {
   title: '模型对比',
   scoreComparison: '分数对比',
-  predictionComparison: '预测对比',
+  predictionComparison: '结果对比',
   selectedModels: '已选模型',
   addModel: '添加',
   cancelAdd: '取消添加报告',
@@ -43,7 +44,7 @@ export const zh: Dict = {
   allAbove: '全部高于阈值',
   allBelow: '全部低于阈值',
   showing: '显示',
-  predictions: '条预测',
+  predictions: '条结果',
   needTwo: '请选择至少2个报告进行对比',
   noCommon: '未找到共同数据集',
   incompatible: '所选运行可能无法对比',
@@ -56,6 +57,7 @@ export const zh: Dict = {
   filterByModel: '筛选',
   any: '不限',
   maxThreeHint: '最多支持对比 3 个模型。',
-  sample: '样本',
+  sample: '目标',
   maxThreeSelected: '仅对比前 3 个。',
+  trajectoryComparison: '挖掘轨迹对比',
 }

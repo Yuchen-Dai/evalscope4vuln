@@ -4,6 +4,7 @@
  * 列内复用 TrajectoryView(variant='stages')，只渲染 5 阶段时间线。
  */
 import type { TrajectoryCompareRun } from '@/api/types'
+import { useLocale } from '@/contexts/LocaleContext'
 import TrajectoryView from './TrajectoryView'
 
 interface Props {
@@ -11,15 +12,16 @@ interface Props {
   displayLabels: Record<string, string>
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  tp: '✓ 命中',
-  fn: '✗ 漏报',
-  unavailable: '— 不可用',
-}
 const STATUS_COLOR: Record<string, string> = {
   tp: 'var(--success, #3fb950)',
   fn: 'var(--danger, #f85149)',
   unavailable: 'var(--text-muted)',
+}
+// 命中状态 → i18n key
+const STATUS_LABEL_KEY: Record<string, string> = {
+  tp: 'trace.statusTp',
+  fn: 'trace.statusFn',
+  unavailable: 'trace.statusUnavailable',
 }
 
 function fmtDuration(ms?: number | null): string {
@@ -29,16 +31,17 @@ function fmtDuration(ms?: number | null): string {
 }
 
 // 统计对照矩阵指标行（s 为某 run 的 trajectory.stats，无 trajectory 时上层显示 —）
-const METRICS: { key: string; label: string; fmt: (s: any) => string }[] = [
-  { key: 'total_steps', label: '步数', fmt: (s) => String(s.total_steps ?? '-') },
-  { key: 'tool_calls', label: '工具调用', fmt: (s) => String(s.tool_calls ?? '-') },
-  { key: 'thoughts', label: '思考', fmt: (s) => String(s.thoughts ?? '-') },
-  { key: 'duration_ms', label: '耗时', fmt: (s) => fmtDuration(s.duration_ms) },
-  { key: 'tokens', label: 'Token', fmt: (s) => ((s.tokens_input || 0) + (s.tokens_output || 0)).toLocaleString() },
-  { key: 'findings', label: '入库', fmt: (s) => String(s.findings ?? '-') },
+const METRICS: { key: string; labelKey: string; fmt: (s: any) => string }[] = [
+  { key: 'total_steps', labelKey: 'trace.statSteps', fmt: (s) => String(s.total_steps ?? '-') },
+  { key: 'tool_calls', labelKey: 'trace.statToolCalls', fmt: (s) => String(s.tool_calls ?? '-') },
+  { key: 'thoughts', labelKey: 'trace.statThoughts', fmt: (s) => String(s.thoughts ?? '-') },
+  { key: 'duration_ms', labelKey: 'trace.statDuration', fmt: (s) => fmtDuration(s.duration_ms) },
+  { key: 'tokens', labelKey: 'trace.statTokens', fmt: (s) => ((s.tokens_input || 0) + (s.tokens_output || 0)).toLocaleString() },
+  { key: 'findings', labelKey: 'trace.statFindings', fmt: (s) => String(s.findings ?? '-') },
 ]
 
 export default function TrajectoryCompareView({ runs, displayLabels }: Props) {
+  const { t } = useLocale()
   return (
     <div className="flex flex-col gap-4">
       {/* 统计对照矩阵（指标 × 模型） */}
@@ -46,7 +49,7 @@ export default function TrajectoryCompareView({ runs, displayLabels }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border)]">
-              <th className="text-left px-3 py-2 text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">指标</th>
+              <th className="text-left px-3 py-2 text-xs text-[var(--text-muted)] font-medium whitespace-nowrap">{t('trace.statMetric')}</th>
               {runs.map((run, i) => (
                 <th key={run.report_name} className="text-left px-3 py-2 text-xs font-semibold whitespace-nowrap"
                   style={{ color: `var(--compare-${i % 3}-dot)` }}>
@@ -57,17 +60,17 @@ export default function TrajectoryCompareView({ runs, displayLabels }: Props) {
           </thead>
           <tbody>
             <tr className="border-b border-[var(--border)]">
-              <td className="px-3 py-2 text-xs text-[var(--text-muted)]">命中</td>
+              <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{t('trace.statHit')}</td>
               {runs.map((run) => (
                 <td key={run.report_name} className="px-3 py-2 text-sm font-semibold"
                   style={{ color: STATUS_COLOR[run.status] }}>
-                  {STATUS_LABEL[run.status] || run.status}
+                  {STATUS_LABEL_KEY[run.status] ? t(STATUS_LABEL_KEY[run.status]) : run.status}
                 </td>
               ))}
             </tr>
             {METRICS.map((m) => (
               <tr key={m.key} className="border-b border-[var(--border)] last:border-b-0">
-                <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{m.label}</td>
+                <td className="px-3 py-2 text-xs text-[var(--text-muted)]">{t(m.labelKey)}</td>
                 {runs.map((run) => (
                   <td key={run.report_name} className="px-3 py-2 font-mono tabular-nums">
                     {run.trajectory ? m.fmt(run.trajectory.stats) : '—'}
@@ -91,7 +94,7 @@ export default function TrajectoryCompareView({ runs, displayLabels }: Props) {
                 <span className="truncate">{label}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded shrink-0"
                   style={{ color: STATUS_COLOR[run.status], background: 'var(--bg-card)' }}>
-                  {STATUS_LABEL[run.status]}
+                  {STATUS_LABEL_KEY[run.status] ? t(STATUS_LABEL_KEY[run.status]) : run.status}
                 </span>
               </div>
               <div className="p-2 max-h-[70vh] overflow-y-auto">
@@ -99,7 +102,7 @@ export default function TrajectoryCompareView({ runs, displayLabels }: Props) {
                   <TrajectoryView trajectory={run.trajectory} variant="stages" />
                 ) : (
                   <div className="text-xs text-[var(--text-muted)] p-4 leading-relaxed">
-                    {run.status === 'fn' ? '该模型未挖到此漏洞（漏报）' : run.reason || '无轨迹数据'}
+                    {run.status === 'fn' ? t('trace.statusMissedHint') : run.reason || t('trace.noTraceData')}
                   </div>
                 )}
               </div>

@@ -4,6 +4,7 @@
  * 数据由后端 trace_view 适配（opencode part → step），前端纯渲染。
  */
 import { useState, type ReactNode } from 'react'
+import { useLocale } from '@/contexts/LocaleContext'
 import type { Trajectory, TraceStage, TraceStep } from '@/api/types'
 
 const STEP_COLOR: Record<string, string> = {
@@ -13,10 +14,24 @@ const STEP_COLOR: Record<string, string> = {
   conclusion: '#39c5cf',
   text: 'var(--text-muted)',
 }
-const STEP_LABEL: Record<string, string> = {
-  thought: '思考', tool: '工具', finding: '入库', conclusion: '结论', text: '输出',
+
+// step 类型 → i18n key（label 经 t() 取，避免模块顶层硬编码中文）
+const STEP_LABEL_KEY: Record<string, string> = {
+  thought: 'trace.stepThought',
+  tool: 'trace.stepTool',
+  finding: 'trace.stepFinding',
+  conclusion: 'trace.stepConclusion',
+  text: 'trace.stepText',
 }
-const STAGE_LABEL: Record<string, string> = { preprocess: '预处理', detect: '探测', mine: '挖掘', deepmine: '深度挖掘', verify: '验证' }
+// 5 阶段 → i18n key
+const STAGE_LABEL_KEY: Record<string, string> = {
+  preprocess: 'trace.stagePreprocess',
+  detect: 'trace.stageDetect',
+  mine: 'trace.stageMine',
+  deepmine: 'trace.stageDeepmine',
+  verify: 'trace.stageVerify',
+}
+const STAGE_ORDER = ['preprocess', 'detect', 'mine', 'deepmine', 'verify'] as const
 
 function fmtDuration(ms?: number | null): string {
   if (!ms) return '-'
@@ -25,6 +40,7 @@ function fmtDuration(ms?: number | null): string {
 }
 
 export default function TrajectoryView({ trajectory, variant = 'full' }: { trajectory: Trajectory; variant?: 'full' | 'stages' }) {
+  const { t } = useLocale()
   const { stages, stats } = trajectory
 
   return (
@@ -33,18 +49,18 @@ export default function TrajectoryView({ trajectory, variant = 'full' }: { traje
         <>
           {/* 统计磁贴 */}
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-            <Stat label="步数" value={stats.total_steps} />
-            <Stat label="工具调用" value={stats.tool_calls} />
-            <Stat label="思考" value={stats.thoughts} />
-            <Stat label="耗时" value={fmtDuration(stats.duration_ms)} />
-            <Stat label="Token" value={(stats.tokens_input + stats.tokens_output).toLocaleString()} />
-            <Stat label="结论" value={stats.conclusions} />
+            <Stat label={t('trace.statSteps')} value={stats.total_steps} />
+            <Stat label={t('trace.statToolCalls')} value={stats.tool_calls} />
+            <Stat label={t('trace.statThoughts')} value={stats.thoughts} />
+            <Stat label={t('trace.statDuration')} value={fmtDuration(stats.duration_ms)} />
+            <Stat label={t('trace.statTokens')} value={(stats.tokens_input + stats.tokens_output).toLocaleString()} />
+            <Stat label={t('trace.statConclusions')} value={stats.conclusions} />
           </div>
 
           {/* 工具分布 */}
           {stats.tool_distribution && Object.keys(stats.tool_distribution).length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-              <span>工具分布:</span>
+              <span>{t('trace.toolDistribution')}</span>
               {Object.entries(stats.tool_distribution).map(([k, v]) => (
                 <span key={k} className="px-2 py-0.5 rounded bg-[var(--bg-card2)] border border-[var(--border)]">
                   {k} ×{v}
@@ -53,13 +69,13 @@ export default function TrajectoryView({ trajectory, variant = 'full' }: { traje
             </div>
           )}
 
-          <Legend />
+          <Legend t={t} />
         </>
       )}
 
       {/* 阶段轨迹（固定 5 阶段，可折叠，空阶段显示解释） */}
-      {(['preprocess', 'detect', 'mine', 'deepmine', 'verify'] as const).map((stage) => (
-        <StageSection key={stage} stage={stage} sessions={(stages as Record<string, TraceStage[]>)[stage] || []} />
+      {STAGE_ORDER.map((stage) => (
+        <StageSection key={stage} stage={stage} sessions={(stages as Record<string, TraceStage[]>)[stage] || []} t={t} />
       ))}
     </div>
   )
@@ -74,33 +90,37 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-const EMPTY_REASON: Record<string, string> = {
-  preprocess: '该项目未跑预处理阶段（无 preprocessing session）',
-  detect: '未关联到该 finding 的探测 session——detect 按子类型批量探测，单个 detection_id 不在 session 文本中；需 finding 带 detection_source_task_id（已向图灵提诉求）才能精确关联',
-  mine: '未关联到该 finding 的挖掘 session（finding.task_id 未命中任何 mining session）',
-  deepmine: '该项目无横向处理（horizontal_processing）阶段',
-  verify: '未关联到该 finding 的验证 session（无 validation_<finding_id>，或该 finding 未跑验证）',
+// 空阶段理由 → i18n key
+const EMPTY_REASON_KEY: Record<string, string> = {
+  preprocess: 'trace.emptyPreprocess',
+  detect: 'trace.emptyDetect',
+  mine: 'trace.emptyMine',
+  deepmine: 'trace.emptyDeepmine',
+  verify: 'trace.emptyVerify',
 }
 
-function StageSection({ stage, sessions }: { stage: string; sessions: TraceStage[] }) {
+type TFunc = (p: string, vars?: Record<string, string | number>) => string
+
+function StageSection({ stage, sessions, t }: { stage: string; sessions: TraceStage[]; t: TFunc }) {
   const [open, setOpen] = useState(true)
   const stepCount = sessions.reduce((n, s) => n + s.steps.length, 0)
+  const stageLabelKey = STAGE_LABEL_KEY[stage]
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden">
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-[var(--bg-card2)] transition-colors">
-        <span className="text-sm font-semibold text-[var(--text)]">{STAGE_LABEL[stage] || stage}</span>
+        <span className="text-sm font-semibold text-[var(--text)]">{stageLabelKey ? t(stageLabelKey) : stage}</span>
         <span className="text-xs text-[var(--text-muted)]">
-          {sessions.length > 0 ? `${sessions.length} session · ${stepCount} 步` : '无数据'}
+          {sessions.length > 0 ? t('trace.sessionSteps', { sessions: sessions.length, steps: stepCount }) : t('trace.noData')}
           <span className="ml-2">{open ? '▾' : '▸'}</span>
         </span>
       </button>
       {open && (
         <div className="px-3 py-2 border-t border-[var(--border)] flex flex-col gap-2">
           {sessions.length === 0 ? (
-            <div className="text-xs text-[var(--text-muted)] py-2 leading-relaxed">{EMPTY_REASON[stage] || '无关联 session'}</div>
+            <div className="text-xs text-[var(--text-muted)] py-2 leading-relaxed">{EMPTY_REASON_KEY[stage] ? t(EMPTY_REASON_KEY[stage]) : t('trace.noSession')}</div>
           ) : sessions.map((sess) => (
-            <StageCard key={sess.task_id || sess.session_id || Math.random()} session={sess} />
+            <StageCard key={sess.task_id || sess.session_id || Math.random()} session={sess} t={t} />
           ))}
         </div>
       )}
@@ -108,7 +128,7 @@ function StageSection({ stage, sessions }: { stage: string; sessions: TraceStage
   )
 }
 
-function StageCard({ session }: { session: TraceStage }) {
+function StageCard({ session, t }: { session: TraceStage; t: TFunc }) {
   return (
     <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden">
       <div className="px-3 py-2 border-b border-[var(--border)] text-xs text-[var(--text-muted)] font-mono truncate">
@@ -116,10 +136,10 @@ function StageCard({ session }: { session: TraceStage }) {
       </div>
       <div className="p-2">
         {session.steps.length === 0 ? (
-          <div className="text-xs text-[var(--text-muted)] p-2">无 step</div>
+          <div className="text-xs text-[var(--text-muted)] p-2">{t('trace.noStep')}</div>
         ) : (
           session.steps.map((step, i) => (
-            <StepRow key={step.id} step={step} last={i === session.steps.length - 1} />
+            <StepRow key={step.id} step={step} last={i === session.steps.length - 1} t={t} />
           ))
         )}
       </div>
@@ -127,10 +147,11 @@ function StageCard({ session }: { session: TraceStage }) {
   )
 }
 
-function StepRow({ step, last }: { step: TraceStep; last: boolean }) {
+function StepRow({ step, last, t }: { step: TraceStep; last: boolean; t: TFunc }) {
   const [open, setOpen] = useState(false)
   const color = STEP_COLOR[step.type] || 'var(--text-muted)'
   const hasDetail = !!step.detail && step.detail !== step.summary
+  const labelKey = STEP_LABEL_KEY[step.type]
   return (
     <div className={`relative pl-6 ${last ? '' : 'pb-1'}`}>
       {!last && <div className="absolute left-[7px] top-3 bottom-0 w-px bg-[var(--border)]" />}
@@ -147,7 +168,7 @@ function StepRow({ step, last }: { step: TraceStep; last: boolean }) {
             className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
             style={{ background: `${color}22`, color }}
           >
-            {STEP_LABEL[step.type] || step.type}
+            {labelKey ? t(labelKey) : step.type}
           </span>
           <span className="text-sm truncate">{step.summary || step.title}</span>
           {hasDetail && (
@@ -164,13 +185,13 @@ function StepRow({ step, last }: { step: TraceStep; last: boolean }) {
   )
 }
 
-function Legend() {
+function Legend({ t }: { t: TFunc }) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-      {Object.entries(STEP_LABEL).map(([k, label]) => (
+      {Object.entries(STEP_LABEL_KEY).map(([k, labelKey]) => (
         <span key={k} className="inline-flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STEP_COLOR[k] }} />
-          {label}
+          {t(labelKey)}
         </span>
       ))}
     </div>

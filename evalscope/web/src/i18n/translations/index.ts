@@ -10,6 +10,7 @@ import * as common from './common'
 import * as markdown from './markdown'
 import * as charts from './charts'
 import * as trace from './trace'
+import * as vuln from './vuln'
 import * as reports from './reports'
 import * as reportDetail from './reportDetail'
 import * as metrics from './metrics'
@@ -32,6 +33,7 @@ const en: Dict = {
   markdown: markdown.en,
   charts: charts.en,
   trace: trace.en,
+  vuln: vuln.en,
   reports: reports.en,
   reportDetail: reportDetail.en,
   metrics: metrics.en,
@@ -53,6 +55,7 @@ const zh: Dict = {
   markdown: markdown.zh,
   charts: charts.zh,
   trace: trace.zh,
+  vuln: vuln.zh,
   reports: reports.zh,
   reportDetail: reportDetail.zh,
   metrics: metrics.zh,

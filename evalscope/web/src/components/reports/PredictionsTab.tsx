@@ -467,7 +467,7 @@ export default function PredictionsTab({ reportName, datasetName, rootPath, init
             {/* Sample X / Y with hash icon */}
             <span className="flex items-center gap-[0.3rem] text-[var(--text-muted)] text-sm tabular-nums">
               <Hash size={13} className="opacity-50" />
-              Sample {page} / {totalPages}
+              {t('prediction.samplePager', { page, total: totalPages })}
               {row && (
                 <span className="text-xs opacity-50 ml-1">
                   (index: {row.Index})

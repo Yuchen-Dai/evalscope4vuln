@@ -2,13 +2,13 @@ import type { Dict } from './types'
 
 export const en: Dict = {
   systemPrompt: 'System Prompt',
-  expectedAnswer: 'Expected Answer',
-  extractedAnswer: 'Extracted Answer',
+  expectedAnswer: 'Ground Truth (vulnerability)',
+  extractedAnswer: 'Finding',
   metadata: 'Metadata',
   toolResult: 'Tool Result',
   copyContent: 'Copy',
   score: 'Score',
-  evalResult: 'Evaluation Result',
+  evalResult: 'Finding',
   scoreJson: 'Score Detail',
   showReasoning: 'Show thinking',
   hideReasoning: 'Hide thinking',
@@ -21,17 +21,18 @@ export const en: Dict = {
   searchByMsgId: 'Find msg id',
   copyMsgId: 'Copy id',
   messageLocated: 'Showing the sample containing message ${id}',
+  samplePager: 'Sample ${page} / ${total}',
 }
 
 export const zh: Dict = {
   systemPrompt: '系统提示词',
-  expectedAnswer: '标准答案',
-  extractedAnswer: '抽取答案',
+  expectedAnswer: 'Ground Truth（漏洞）',
+  extractedAnswer: '挖掘结果',
   metadata: '元数据',
   toolResult: '工具结果',
   copyContent: '复制',
   score: '得分',
-  evalResult: '评估结果',
+  evalResult: '挖掘结果',
   scoreJson: '得分详情',
   showReasoning: '展开思考',
   hideReasoning: '收起思考',
@@ -44,4 +45,5 @@ export const zh: Dict = {
   searchByMsgId: '查找消息 id',
   copyMsgId: '复制 id',
   messageLocated: '已定位到包含消息 ${id} 的样本',
+  samplePager: '样本 ${page} / ${total}',
 }

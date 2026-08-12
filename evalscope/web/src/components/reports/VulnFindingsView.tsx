@@ -4,6 +4,7 @@
  * 通过 props 传入，本组件不自带 selector。
  */
 import { useMemo, useState, type ReactNode } from 'react'
+import { useLocale } from '@/contexts/LocaleContext'
 import type { PredictionRow, FnAdvice } from '@/api/types'
 
 interface Props {
@@ -38,6 +39,7 @@ const SEV_COLOR: Record<string, string> = {
 export default function VulnFindingsView({
   predictions, regime, fnAdvice, analyzingGtIds, analyzingAll, fnRunning, fnAllError, onAnalyze, onAnalyzeAll, onStopFnAdvice,
 }: Props) {
+  const { t } = useLocale()
   const vulnPreds = predictions.filter((p) => p.Findings)
   const [scanIdx, setScanIdx] = useState(0)
   const [view, setView] = useState<ViewMode>('gt')
@@ -117,14 +119,14 @@ export default function VulnFindingsView({
     <div className="flex flex-col gap-3">
       {/* summary chips */}
       <div className="flex flex-wrap items-center gap-2">
-        <Chip label="GT" value={summary.gt_total ?? f.gt.length} />
-        <Chip label="findings" value={summary.findings_total ?? f.findings.length} />
-        <Chip label="TP" value={summary.tp ?? 0} color="var(--accent)" />
-        <Chip label="FP" value={summary.fp ?? 0} color="#e8590c" />
-        <Chip label="FN" value={summary.fn ?? 0} color="var(--danger)" />
-        <Chip label="P" value={pct('Precision')} />
-        <Chip label="R" value={pct('Recall')} />
-        <Chip label="F1" value={pct('F1')} />
+        <Chip label={t('vuln.gt')} value={summary.gt_total ?? f.gt.length} />
+        <Chip label={t('vuln.findings')} value={summary.findings_total ?? f.findings.length} />
+        <Chip label={t('vuln.tp')} value={summary.tp ?? 0} color="var(--accent)" />
+        <Chip label={t('vuln.fp')} value={summary.fp ?? 0} color="#e8590c" />
+        <Chip label={t('vuln.fn')} value={summary.fn ?? 0} color="var(--danger)" />
+        <Chip label={t('vuln.precisionShort')} value={pct('Precision')} />
+        <Chip label={t('vuln.recallShort')} value={pct('Recall')} />
+        <Chip label={t('vuln.f1Short')} value={pct('F1')} />
       </div>
 
       {/* scan / view / filter / type */}
@@ -135,7 +137,7 @@ export default function VulnFindingsView({
             onChange={(e) => { setScanIdx(Number(e.target.value)); setSelGt(null); setSelFinding(null) }}
             className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
           >
-            {vulnPreds.map((p, i) => <option key={i} value={i}>扫描 #{p.Index}</option>)}
+            {vulnPreds.map((p, i) => <option key={i} value={i}>{t('vuln.scanNumber', { n: p.Index })}</option>)}
           </select>
         )}
         <div className="inline-flex rounded-[var(--radius)] border border-[var(--border-md)] overflow-hidden text-sm">
@@ -144,7 +146,7 @@ export default function VulnFindingsView({
               key={v}
               onClick={() => { setView(v); setSelGt(null); setSelFinding(null) }}
               className={`px-3 py-1 transition-colors cursor-pointer ${view === v ? 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90' : 'bg-[var(--bg-card2)] text-[var(--text-muted)] hover:bg-[var(--bg-deep)] hover:text-[var(--text)]'}`}
-            >{v === 'gt' ? '按 GT' : '按 Finding'}</button>
+            >{v === 'gt' ? t('vuln.byGt') : t('vuln.byFinding')}</button>
           ))}
         </div>
         <div className="inline-flex rounded-[var(--radius)] border border-[var(--border-md)] overflow-hidden text-sm">
@@ -153,7 +155,7 @@ export default function VulnFindingsView({
               key={k}
               onClick={() => setFilter(k)}
               className={`px-3 py-1 transition-colors cursor-pointer ${filter === k ? 'bg-[var(--accent)] text-[var(--bg)] hover:opacity-90' : 'bg-[var(--bg-card2)] text-[var(--text-muted)] hover:bg-[var(--bg-deep)] hover:text-[var(--text)]'}`}
-            >{k === 'all' ? '全部' : k}</button>
+            >{k === 'all' ? t('vuln.all') : k}</button>
           ))}
         </div>
         <select
@@ -161,7 +163,7 @@ export default function VulnFindingsView({
           onChange={(e) => setTypeFilter(e.target.value)}
           className="px-2 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--accent)] cursor-pointer transition-colors"
         >
-          <option value="">所有类型</option>
+          <option value="">{t('vuln.allTypes')}</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
         </select>
         {onAnalyzeAll && fnGtIds.length > 0 && (
@@ -180,23 +182,23 @@ export default function VulnFindingsView({
             {fnRunning && onStopFnAdvice && (
               <button onClick={onStopFnAdvice}
                 className="px-2 py-1 text-xs rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] cursor-pointer transition-colors"
-                title="停止（下个漏洞边界退出，已完成结果保留）"
-              >停止</button>
+                title={t('vuln.stopTitle')}
+              >{t('vuln.stop')}</button>
             )}
             <button
               onClick={() => onAnalyzeAll(fnGtIds)}
               disabled={!!fnRunning}
               className="px-3 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
-              title="对全部漏报(FN)漏洞逐个跑 AI 路径分析"
+              title={t('vuln.analyzeAllTitle')}
             >
-              {fnRunning ? '分析中…' : `全量分析漏报(${fnGtIds.length})`}
+              {fnRunning ? t('vuln.analyzingAll') : t('vuln.analyzeAll', { n: fnGtIds.length })}
             </button>
           </div>
         )}
       </div>
       {fnAllError && (
         <div className="text-xs text-[var(--danger)] break-all">
-          ⚠ {fnAllError}（可在右上角 ⚙ 配置 Judge 模型后重试）
+          {t('vuln.fnAllErrorHint', { msg: fnAllError })}
         </div>
       )}
 
@@ -205,7 +207,7 @@ export default function VulnFindingsView({
         {/* 左列表 */}
         <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] max-h-[70vh] overflow-y-auto">
           {view === 'gt' ? (
-            gtList.length === 0 ? <div className="p-4 text-sm text-[var(--text-muted)]">无匹配 GT</div> :
+            gtList.length === 0 ? <div className="p-4 text-sm text-[var(--text-muted)]">{t('vuln.noMatchingGt')}</div> :
             gtList.map((g) => {
               const hits = gtHitsOf(g)
               const miss = missedOf(g)
@@ -218,15 +220,15 @@ export default function VulnFindingsView({
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium truncate">{g.gt_id}</span>
                     {miss
-                      ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--danger)] text-white">漏报</span>
-                      : <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)] text-white">{hits.length} 命中</span>}
+                      ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--danger)] text-white">{t('vuln.missed')}</span>
+                      : <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)] text-white">{t('vuln.nHits', { n: hits.length })}</span>}
                   </div>
                   <div className="text-xs text-[var(--text-muted)] truncate">{g.vuln_type} · {g.location?.file}{g.location?.line ? `:${g.location.line}` : ''}</div>
                 </button>
               )
             })
           ) : (
-            findingList.length === 0 ? <div className="p-4 text-sm text-[var(--text-muted)]">无 finding</div> :
+            findingList.length === 0 ? <div className="p-4 text-sm text-[var(--text-muted)]">{t('vuln.noFinding')}</div> :
             <>
               {findingList.slice(0, 500).map((it) => {
                 const cls = classOf(it)
@@ -245,7 +247,7 @@ export default function VulnFindingsView({
                   </button>
                 )
               })}
-              {findingList.length > 500 && <div className="p-2 text-xs text-[var(--text-muted)]">（仅显示前 500 条，用过滤缩小范围）</div>}
+              {findingList.length > 500 && <div className="p-2 text-xs text-[var(--text-muted)]">{t('vuln.showingFirst')}</div>}
             </>
           )}
         </div>
@@ -257,7 +259,7 @@ export default function VulnFindingsView({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-semibold">{selGtObj.gt_id}</h3>
-                  {missedOf(selGtObj) && <span className="text-xs px-2 py-0.5 rounded bg-[var(--danger)] text-white">图灵漏报 FN</span>}
+                  {missedOf(selGtObj) && <span className="text-xs px-2 py-0.5 rounded bg-[var(--danger)] text-white">{t('vuln.turingMissedFn')}</span>}
                 </div>
                 {missedOf(selGtObj) && onAnalyze && (
                   <FnAdviceBlock
@@ -267,15 +269,15 @@ export default function VulnFindingsView({
                     onAnalyze={onAnalyze}
                   />
                 )}
-                <Detail label="类型" value={selGtObj.vuln_type} />
-                <Detail label="严重度" value={selGtObj.severity} color={sevColor(selGtObj.severity)} />
-                <Detail label="CWE/ID" value={selGtObj.cwe} />
-                <Detail label="位置" value={`${selGtObj.location?.file || ''}${selGtObj.location?.line ? ':' + selGtObj.location.line : ''}`} />
-                {selGtObj.description && <Detail label="描述" value={selGtObj.description} />}
+                <Detail label={t('vuln.type')} value={selGtObj.vuln_type} />
+                <Detail label={t('vuln.severity')} value={selGtObj.severity} color={sevColor(selGtObj.severity)} />
+                <Detail label={t('vuln.cweId')} value={selGtObj.cwe} />
+                <Detail label={t('vuln.location')} value={`${selGtObj.location?.file || ''}${selGtObj.location?.line ? ':' + selGtObj.location.line : ''}`} />
+                {selGtObj.description && <Detail label={t('vuln.description')} value={selGtObj.description} />}
                 <div className="mt-1">
-                  <div className="text-xs text-[var(--text-muted)] mb-1">匹配的图灵 finding（{gtHitsOf(selGtObj).length}）</div>
+                  <div className="text-xs text-[var(--text-muted)] mb-1">{t('vuln.matchedFindings', { n: gtHitsOf(selGtObj).length })}</div>
                   {gtHitsOf(selGtObj).length === 0 ? (
-                    <div className="text-sm text-[var(--text-muted)]">无 — 图灵未报出此漏洞</div>
+                    <div className="text-sm text-[var(--text-muted)]">{t('vuln.noMatchedFinding')}</div>
                   ) : (
                     gtHitsOf(selGtObj).map((fid) => {
                       const ff = f.findings.find((x) => x.finding_id === fid)
@@ -301,17 +303,17 @@ export default function VulnFindingsView({
                   <h3 className="text-base font-semibold truncate">{selFindingObj.title || selFindingObj.vuln_type || selFindingObj.finding_id}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${classOf(selFindingObj) === 'TP' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-deep)] text-[var(--text-muted)]'}`}>{classOf(selFindingObj)}</span>
                 </div>
-                <Detail label="类型" value={selFindingObj.vuln_type} />
-                <Detail label="严重度" value={selFindingObj.severity} color={sevColor(selFindingObj.severity)} />
-                {selFindingObj.confidence != null && <Detail label="置信度" value={selFindingObj.confidence} />}
-                {selFindingObj.validation_result && <Detail label="校验" value={selFindingObj.validation_result} />}
-                <Detail label="命中 GT" value={gtIdOf(selFindingObj) || '无（FP，未命中任何 GT）'} color={gtIdOf(selFindingObj) ? 'var(--accent)' : 'var(--text-muted)'} />
-                {selFindingObj.display_id && <Detail label="ID" value={selFindingObj.display_id} />}
-                {selFindingObj.description && <Detail label="描述" value={selFindingObj.description} />}
+                <Detail label={t('vuln.type')} value={selFindingObj.vuln_type} />
+                <Detail label={t('vuln.severity')} value={selFindingObj.severity} color={sevColor(selFindingObj.severity)} />
+                {selFindingObj.confidence != null && <Detail label={t('vuln.confidence')} value={selFindingObj.confidence} />}
+                {selFindingObj.validation_result && <Detail label={t('vuln.validation')} value={selFindingObj.validation_result} />}
+                <Detail label={t('vuln.hitGt')} value={gtIdOf(selFindingObj) || t('vuln.fpNoHit')} color={gtIdOf(selFindingObj) ? 'var(--accent)' : 'var(--text-muted)'} />
+                {selFindingObj.display_id && <Detail label={t('vuln.id')} value={selFindingObj.display_id} />}
+                {selFindingObj.description && <Detail label={t('vuln.description')} value={selFindingObj.description} />}
                 {selFindingObj.raw && (
                   <div className="mt-1">
                     <button onClick={() => setShowRaw(!showRaw)} className="text-xs text-[var(--accent)] hover:underline cursor-pointer">
-                      图灵原始返回（raw JSON）{showRaw ? '▾' : '▸'}
+                      {t('vuln.rawJson')}{showRaw ? '▾' : '▸'}
                     </button>
                     {showRaw && (
                       <pre className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] text-xs overflow-x-auto max-h-[400px] overflow-y-auto">{JSON.stringify(selFindingObj.raw, null, 2)}</pre>
@@ -338,7 +340,8 @@ function Detail({ label, value, color }: { label: string; value?: ReactNode; col
 }
 
 function EmptyDetail() {
-  return <div className="text-sm text-[var(--text-muted)]">从左侧选择一项查看详情</div>
+  const { t } = useLocale()
+  return <div className="text-sm text-[var(--text-muted)]">{t('vuln.selectHint')}</div>
 }
 
 /** FN 漏报 LLM 分析建议区块：触发按钮 + 建议/错误展示。 */
@@ -348,6 +351,7 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
   analyzing?: boolean
   onAnalyze?: (gtId: string) => void
 }) {
+  const { t } = useLocale()
   return (
     <div className="mt-1 pt-2 border-t border-[var(--border)]">
       <div className="flex items-center gap-2 mb-1">
@@ -356,17 +360,17 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
           disabled={analyzing}
           className="px-2.5 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
         >
-          {analyzing ? '分析中...' : (advice ? '重新分析' : '分析漏报原因')}
+          {analyzing ? t('vuln.analyzing') : (advice ? t('vuln.reanalyze') : t('vuln.analyzeMissed'))}
         </button>
         {advice?.status === 'ok' && advice.related_sessions != null && (
           <span className="text-[10px] text-[var(--text-muted)]">
-            命中 {advice.related_sessions} 条相关 session · 文件 {advice.related_files?.length ?? 0}
+            {t('vuln.fnRelatedSessions', { sessions: advice.related_sessions, files: advice.related_files?.length ?? 0 })}
           </span>
         )}
       </div>
       {!advice && (
         <div className="text-xs text-[var(--text-muted)]">
-          点击按钮，AI 复盘图灵为何漏挖此漏洞（基于图灵接触相关文件的挖掘 session）
+          {t('vuln.fnAdviceHint')}
         </div>
       )}
       {advice?.status === 'error' && (

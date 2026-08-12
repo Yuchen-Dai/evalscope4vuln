@@ -5,7 +5,7 @@ export const en: Dict = {
   tableView: 'Table',
   radarView: 'Radar',
   scoreThreshold: 'Score Threshold',
-  samples: 'samples',
+  samples: 'targets',
 }
 
 export const zh: Dict = {
@@ -13,5 +13,5 @@ export const zh: Dict = {
   tableView: '表格',
   radarView: '雷达图',
   scoreThreshold: '分数阈值',
-  samples: '样本',
+  samples: '目标',
 }

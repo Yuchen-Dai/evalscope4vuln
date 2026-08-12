@@ -2,14 +2,14 @@ import type { Dict } from './types'
 
 export const en: Dict = {
   totalEvaluations: 'Total Evaluations',
-  modelsEvaluated: 'Models Evaluated',
+  modelsEvaluated: 'Scanners Evaluated',
   noReportsHint: 'Enter an output directory and click Scan to discover reports',
   model: 'Model',
   dataset: 'Dataset',
   result: 'Result',
   date: 'Date',
   neverText: '—',
-  samples: 'samples',
+  samples: 'targets',
   welcomeTitle: 'Welcome to EvalScope',
   welcomeDesc: 'Enter an output directory path and scan to get started',
   searchPlaceholder: 'Search models or datasets...',
@@ -23,14 +23,14 @@ export const en: Dict = {
 
 export const zh: Dict = {
   totalEvaluations: '评测总数',
-  modelsEvaluated: '已评估模型',
+  modelsEvaluated: '已测评扫描器',
   noReportsHint: '输入输出目录路径并点击扫描来发现报告',
   model: '模型',
   dataset: '数据集',
   result: '结果',
   date: '日期',
   neverText: '—',
-  samples: '样本',
+  samples: '目标',
   welcomeTitle: '欢迎使用 EvalScope',
   welcomeDesc: '输入输出目录路径并扫描即可开始',
   searchPlaceholder: '搜索模型或数据集...',

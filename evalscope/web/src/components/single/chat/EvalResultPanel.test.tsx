@@ -28,8 +28,12 @@ describe('EvalResultPanel', () => {
   it('uses one neutral label hierarchy and a restrained success score', () => {
     renderPanel(1)
 
-    expect(screen.getByText('Extracted Answer')).toHaveClass('type-label-xs')
-    expect(screen.getByText('Expected Answer')).toHaveClass('type-label-xs')
+    // evalResult (panel header) and extractedAnswer both render the "Finding"
+    // term per the vuln repositioning, so the label appears more than once.
+    const findingLabels = screen.getAllByText('Finding')
+    expect(findingLabels.length).toBeGreaterThanOrEqual(1)
+    expect(findingLabels[0]).toHaveClass('type-label-xs')
+    expect(screen.getByText('Ground Truth (vulnerability)')).toHaveClass('type-label-xs')
     expect(screen.getByText('100.0%')).toHaveStyle({ color: 'var(--success)' })
   })
 

@@ -141,7 +141,7 @@ export default function ReportDetailPage() {
     { key: 'overview', label: t('reportDetail.overview'), panelId: 'report-overview-panel' },
     { key: 'details', label: t('reportDetail.details'), panelId: 'report-details-panel' },
     { key: 'predictions', label: t('reportDetail.predictions'), panelId: 'report-predictions-panel' },
-    { key: 'trace', label: '挖掘轨迹', panelId: 'report-trace-panel' },
+    { key: 'trace', label: t('reportDetail.trajectory'), panelId: 'report-trace-panel' },
   ]
 
   const renderDatasetPanel = (content: ReactNode) => (

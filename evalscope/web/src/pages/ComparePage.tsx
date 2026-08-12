@@ -437,7 +437,7 @@ export default function ComparePage() {
         tabs={[
           { key: 'score', label: t('compare.scoreComparison'), panelId: 'compare-score-panel' },
           { key: 'prediction', label: t('compare.predictionComparison'), panelId: 'compare-prediction-panel' },
-          { key: 'trace', label: '挖掘轨迹对比', panelId: 'compare-trace-panel' },
+          { key: 'trace', label: t('compare.trajectoryComparison'), panelId: 'compare-trace-panel' },
         ]}
         activeKey={activeTab}
         onChange={(k) => setActiveTab(k as 'score' | 'prediction' | 'trace')}

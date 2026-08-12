@@ -78,7 +78,7 @@ export default function DetailsTab({ reportName, datasetName, rootPath, onSubset
   const subsetColumns = [
     {
       key: 'Subset',
-      label: 'Subset',
+      label: t('reportDetail.subset'),
       sortable: true,
       render: (row: Record<string, unknown>) => {
         const name = String(row.Subset ?? '')
@@ -106,7 +106,7 @@ export default function DetailsTab({ reportName, datasetName, rootPath, onSubset
     }] : []),
     {
       key: 'Score',
-      label: 'Score',
+      label: t('reportDetail.score'),
       sortable: true,
       render: (row: Record<string, unknown>) => {
         const score = Number(row.Score ?? 0)
@@ -132,7 +132,7 @@ export default function DetailsTab({ reportName, datasetName, rootPath, onSubset
     },
     {
       key: 'Num',
-      label: 'Num',
+      label: t('reportDetail.num'),
       sortable: true,
       render: (row: Record<string, unknown>) => (
         <span className="text-[var(--text-muted)]">{Number(row.Num ?? 0).toLocaleString()}</span>

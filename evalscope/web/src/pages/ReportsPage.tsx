@@ -220,15 +220,15 @@ export default function ReportsPage() {
 
   const handleDelete = useCallback(async () => {
     if (selectedForCompare.length === 0) return
-    if (!window.confirm(`确定删除选中的 ${selectedForCompare.length} 个 report？此操作不可恢复。`)) return
+    if (!window.confirm(t('reports.deleteConfirm', { n: selectedForCompare.length }))) return
     try {
       await Promise.all(selectedForCompare.map((n) => reportsApi.deleteReport(n)))
       clearCompareSelection()
       setReloadToken((n) => n + 1)
     } catch (e) {
-      alert('删除失败: ' + String(e))
+      alert(t('reports.deleteFailed', { msg: String(e) }))
     }
-  }, [selectedForCompare, clearCompareSelection])
+  }, [selectedForCompare, clearCompareSelection, t])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 

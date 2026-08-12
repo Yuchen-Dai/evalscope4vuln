@@ -3,6 +3,7 @@
  * 数据：报告 findings（getPredictions）+ /trace/for-finding（getTraceForFinding，经图灵拉真实 sessions）。
  */
 import { useEffect, useState } from 'react'
+import { useLocale } from '@/contexts/LocaleContext'
 import { getPredictions, getTraceForFinding } from '@/api/reports'
 import { isDomainError } from '@/api/errors'
 import type { PredictionRow, Trajectory } from '@/api/types'
@@ -30,6 +31,7 @@ interface FindingItem {
 }
 
 export default function TrajectoryTab({ reportName, datasetName, rootPath }: Props) {
+  const { t } = useLocale()
   const [findings, setFindings] = useState<FindingItem[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [trajectory, setTrajectory] = useState<Trajectory | null>(null)
@@ -80,7 +82,7 @@ export default function TrajectoryTab({ reportName, datasetName, rootPath }: Pro
       {error && <ErrorAlert>{error}</ErrorAlert>}
       {!findings.length && !loading ? (
         <div className="text-sm text-[var(--text-muted)] p-4">
-          无 findings（非 vuln benchmark 或无数据）
+          {t('trace.noFindings')}
         </div>
       ) : findings.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-3">
@@ -98,7 +100,7 @@ export default function TrajectoryTab({ reportName, datasetName, rootPath }: Pro
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-dim)] text-[var(--accent)]">{f.severity}</span>
                   )}
                 </div>
-                <div className="text-sm truncate">{f.title || f.vuln_type || '(无标题)'}</div>
+                <div className="text-sm truncate">{f.title || f.vuln_type || t('trace.untitled')}</div>
                 <div className="text-xs text-[var(--text-muted)] truncate">{f.vuln_type}</div>
               </button>
             ))}
@@ -110,7 +112,7 @@ export default function TrajectoryTab({ reportName, datasetName, rootPath }: Pro
             ) : trajectory ? (
               <TrajectoryView trajectory={trajectory} />
             ) : (
-              <div className="text-sm text-[var(--text-muted)]">从左侧选择 finding 查看挖掘轨迹</div>
+              <div className="text-sm text-[var(--text-muted)]">{t('trace.selectFindingHint')}</div>
             )}
           </div>
         </div>

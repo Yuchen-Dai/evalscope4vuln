@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import { FORM_LABEL_CLASS, inputClass } from '@/components/ui/formStyles'
+import { useLocale } from '@/contexts/LocaleContext'
 import { getJudgeConfig, saveJudgeConfig } from '@/api/settings'
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
  * api_key 不回显明文，留空保存=保留旧值。
  */
 export default function JudgeConfigModal({ open, onClose }: Props) {
+  const { t } = useLocale()
   const [apiUrl, setApiUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [modelId, setModelId] = useState('')
@@ -31,13 +33,13 @@ export default function JudgeConfigModal({ open, onClose }: Props) {
     setLoading(true)
     getJudgeConfig()
       .then((c) => { setApiUrl(c.api_url); setModelId(c.model_id); setHasKey(c.has_api_key) })
-      .catch((e) => setMsg({ kind: 'error', text: '加载失败: ' + String(e) }))
+      .catch((e) => setMsg({ kind: 'error', text: t('eval.judge.loadFailed', { msg: String(e) }) }))
       .finally(() => setLoading(false))
-  }, [open])
+  }, [open, t])
 
   const handleSave = async () => {
     if (!apiUrl.trim() || !modelId.trim()) {
-      setMsg({ kind: 'error', text: 'API 地址和模型不能为空' })
+      setMsg({ kind: 'error', text: t('eval.judge.requiredError') })
       return
     }
     setSaving(true)
@@ -52,9 +54,9 @@ export default function JudgeConfigModal({ open, onClose }: Props) {
       const res = await saveJudgeConfig(payload)
       setHasKey(res.has_api_key)
       setApiKey('')
-      setMsg({ kind: 'ok', text: '已保存' })
+      setMsg({ kind: 'ok', text: t('eval.judge.saved') })
     } catch (e) {
-      setMsg({ kind: 'error', text: '保存失败: ' + String(e) })
+      setMsg({ kind: 'error', text: t('eval.judge.saveFailed', { msg: String(e) }) })
     } finally {
       setSaving(false)
     }
@@ -64,25 +66,25 @@ export default function JudgeConfigModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Judge 模型配置"
+      title={t('eval.judge.title')}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button variant="ghost" onClick={onClose}>{t('eval.judge.cancel')}</Button>
           <Button variant="primary" onClick={handleSave} disabled={saving || loading}>
-            {saving ? '保存中...' : '保存'}
+            {saving ? t('eval.judge.saving') : t('eval.judge.save')}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <p className="text-xs text-[var(--text-muted)]">
-          全局 Judge 模型配置，用于 FN 漏报路径分析（LLM-as-judge）。所有报告共享，
-          评测前后均可配置；也可用环境变量 <code>VULN_JUDGE_API_URL</code> /{' '}
-          <code>VULN_JUDGE_API_KEY</code> / <code>VULN_JUDGE_MODEL</code> 预设。
+          {t('eval.judge.desc')} {t('eval.judge.envPrefix')}{' '}
+          <code>VULN_JUDGE_API_URL</code> /{' '}
+          <code>VULN_JUDGE_API_KEY</code> / <code>VULN_JUDGE_MODEL</code>。
         </p>
-        {loading && <p className="text-xs text-[var(--text-muted)]">加载中...</p>}
+        {loading && <p className="text-xs text-[var(--text-muted)]">{t('eval.judge.loading')}</p>}
         <div>
-          <label className={FORM_LABEL_CLASS}>API 地址</label>
+          <label className={FORM_LABEL_CLASS}>{t('eval.judge.apiUrl')}</label>
           <input
             type="text"
             value={apiUrl}
@@ -93,7 +95,7 @@ export default function JudgeConfigModal({ open, onClose }: Props) {
           />
         </div>
         <div>
-          <label className={FORM_LABEL_CLASS}>模型</label>
+          <label className={FORM_LABEL_CLASS}>{t('eval.judge.model')}</label>
           <input
             type="text"
             value={modelId}
@@ -104,13 +106,13 @@ export default function JudgeConfigModal({ open, onClose }: Props) {
           />
         </div>
         <div>
-          <label className={FORM_LABEL_CLASS}>API Key</label>
+          <label className={FORM_LABEL_CLASS}>{t('eval.judge.apiKey')}</label>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             className={inputClass()}
-            placeholder={hasKey ? '已配置（留空保留）' : 'sk-...'}
+            placeholder={hasKey ? t('eval.judge.keyConfigured') : 'sk-...'}
             autoComplete="off"
           />
         </div>
