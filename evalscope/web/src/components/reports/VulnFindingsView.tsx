@@ -352,6 +352,8 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
   onAnalyze?: (gtId: string) => void
 }) {
   const { t } = useLocale()
+  const [showFiles, setShowFiles] = useState(false)
+  const files = advice?.related_files ?? []
   return (
     <div className="mt-1 pt-2 border-t border-[var(--border)]">
       <div className="flex items-center gap-2 mb-1">
@@ -364,8 +366,16 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
         </button>
         {advice?.status === 'ok' && advice.related_sessions != null && (
           <span className="text-[10px] text-[var(--text-muted)]">
-            {t('vuln.fnRelatedSessions', { sessions: advice.related_sessions, files: advice.related_files?.length ?? 0 })}
+            {t('vuln.fnRelatedSessions', { sessions: advice.related_sessions })}
           </span>
+        )}
+        {advice?.status === 'ok' && files.length > 0 && (
+          <button
+            onClick={() => setShowFiles(!showFiles)}
+            className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer ml-auto"
+          >
+            {t('vuln.fnRelatedFiles', { n: files.length })}{showFiles ? ' ▾' : ' ▸'}
+          </button>
         )}
       </div>
       {!advice && (
@@ -375,6 +385,15 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
       )}
       {advice?.status === 'error' && (
         <div className="text-xs text-[var(--danger)] break-all">⚠ {advice.error}</div>
+      )}
+      {advice?.status === 'ok' && files.length > 0 && showFiles && (
+        <div className="mt-1 mb-1 flex flex-col gap-0.5">
+          {files.map((fp, i) => (
+            <span key={i} className="text-[11px] font-mono text-[var(--text-muted)] truncate" title={fp}>
+              {fp}
+            </span>
+          ))}
+        </div>
       )}
       {advice?.status === 'ok' && advice.advice && (
         <pre className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">{advice.advice}</pre>

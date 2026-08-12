@@ -365,6 +365,9 @@ export const traceStepSchema = z.object({
   detail: z.string().optional(),
   time: z.number().nullable().optional(),
   tool: z.string().optional(),
+  // best-effort 源码位置：从 tool input 提取的 file + 行号；read/grep/edit 类工具才有。
+  file: z.string().optional(),
+  line: z.number().nullable().optional(),
 }).passthrough()
 
 /** 轨迹阶段：一个 session（mine/verify/detect）。 */

@@ -152,6 +152,10 @@ function StepRow({ step, last, t }: { step: TraceStep; last: boolean; t: TFunc }
   const color = STEP_COLOR[step.type] || 'var(--text-muted)'
   const hasDetail = !!step.detail && step.detail !== step.summary
   const labelKey = STEP_LABEL_KEY[step.type]
+  const hasLoc = !!step.file
+  // 长路径只保留 basename（+ 父目录），便于一眼定位文件；hover title 看全路径。
+  const shortPath = step.file ? step.file.replace(/^.*\//, '') : ''
+  const locLabel = hasLoc ? (step.line ? `${shortPath}:${step.line}` : shortPath) : ''
   return (
     <div className={`relative pl-6 ${last ? '' : 'pb-1'}`}>
       {!last && <div className="absolute left-[7px] top-3 bottom-0 w-px bg-[var(--border)]" />}
@@ -171,6 +175,14 @@ function StepRow({ step, last, t }: { step: TraceStep; last: boolean; t: TFunc }
             {labelKey ? t(labelKey) : step.type}
           </span>
           <span className="text-sm truncate">{step.summary || step.title}</span>
+          {hasLoc && (
+            <span
+              className="text-[10px] font-mono text-[var(--text-muted)] shrink-0 max-w-[40%] truncate"
+              title={hasLoc ? (step.line ? `${step.file}:${step.line}` : step.file) : undefined}
+            >
+              {locLabel}
+            </span>
+          )}
           {hasDetail && (
             <span className="text-[10px] text-[var(--text-muted)] shrink-0">{open ? '▾' : '▸'}</span>
           )}

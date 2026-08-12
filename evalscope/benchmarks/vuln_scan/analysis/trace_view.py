@@ -90,6 +90,38 @@ def _tool_summary(part: dict, name: str) -> str:
     return name
 
 
+# best-effort 提取源码位置的字段约定（opencode 工具格式多样，命中即取，无则放弃）。
+_FILE_KEYS = ('filePath', 'path', 'file')  # 排除 pattern/name——它们非文件路径
+_LINE_KEYS = ('line', 'lineNumber', 'line_start', 'lineStart', 'start_line', 'startLine')
+
+
+def _tool_source_location(part: dict) -> tuple[str | None, int | None]:
+    """best-effort 从 opencode tool input 提取 (file, line)。
+
+    只读 input/args 里的路径与行号字段（read/grep/edit 类工具）。提取不到返回 (None, None)，
+    由调用方决定是否带 file/line。不抛错。
+    """
+    inp = part.get('input') or part.get('args')
+    if not isinstance(inp, dict):
+        return None, None
+    file = None
+    for k in _FILE_KEYS:
+        v = inp.get(k)
+        if isinstance(v, str) and v.strip():
+            file = v.strip()
+            break
+    line = None
+    for k in _LINE_KEYS:
+        v = inp.get(k)
+        if isinstance(v, int) and v > 0:
+            line = v
+            break
+        if isinstance(v, str) and v.strip().isdigit():
+            line = int(v.strip())
+            break
+    return file, line
+
+
 def session_to_steps(session: dict) -> list[dict]:
     """opencode message {info, parts} → step[]（仿 index.html step 节点）。
 
@@ -119,12 +151,24 @@ def session_to_steps(session: dict) -> list[dict]:
         elif t == 'tool':
             name = _tool_name(p)
             stype = 'finding' if _is_finding_submit(p) else 'tool'
-            steps.append({'id': sid, 'type': stype, 'title': name, 'tool': name,
-                          'summary': _tool_summary(p, name), 'detail': _tool_detail(p), 'time': time})
+            step = {'id': sid, 'type': stype, 'title': name, 'tool': name,
+                    'summary': _tool_summary(p, name), 'detail': _tool_detail(p), 'time': time}
+            file, line = _tool_source_location(p)
+            if file:
+                step['file'] = file
+            if line:
+                step['line'] = line
+            steps.append(step)
         elif t == 'patch':
             detail = json.dumps(p.get('patch') or p, ensure_ascii=False)[:3000]
-            steps.append({'id': sid, 'type': 'tool', 'title': 'patch', 'tool': 'patch',
-                          'summary': '代码修改', 'detail': detail, 'time': time})
+            step = {'id': sid, 'type': 'tool', 'title': 'patch', 'tool': 'patch',
+                    'summary': '代码修改', 'detail': detail, 'time': time}
+            file, line = _tool_source_location(p)
+            if file:
+                step['file'] = file
+            if line:
+                step['line'] = line
+            steps.append(step)
         # step-start / step-finish: 边界，不生成 step
     return steps
 
