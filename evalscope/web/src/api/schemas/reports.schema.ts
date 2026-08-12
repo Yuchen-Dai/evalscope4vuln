@@ -377,14 +377,17 @@ export const traceStatsSchema = z.object({
   tool_distribution: z.record(z.string(), z.number()),
 }).passthrough()
 
-/** GET /trace/for-finding 响应（按 finding 关联各阶段 session 轨迹 + 统计）。 */
+/** GET /trace/for-finding 响应（按 finding 关联各阶段 session 轨迹 + 统计 + 故事线）。 */
 export const trajectorySchema = z.object({
   stages: z.object({
-    mine: z.array(traceStageSchema),
-    verify: z.array(traceStageSchema),
+    preprocess: z.array(traceStageSchema).optional(),
     detect: z.array(traceStageSchema),
+    mine: z.array(traceStageSchema),
+    deepmine: z.array(traceStageSchema).optional(),
+    verify: z.array(traceStageSchema),
   }),
   stats: traceStatsSchema,
+  story: z.array(z.string()).optional(),
 }).passthrough()
 
 export type Trajectory = z.infer<typeof trajectorySchema>

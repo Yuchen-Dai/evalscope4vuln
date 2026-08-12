@@ -16,7 +16,7 @@ const STEP_COLOR: Record<string, string> = {
 const STEP_LABEL: Record<string, string> = {
   thought: '思考', tool: '工具', finding: '入库', conclusion: '结论', text: '输出',
 }
-const STAGE_LABEL: Record<string, string> = { mine: '挖掘', verify: '验证', detect: '探测' }
+const STAGE_LABEL: Record<string, string> = { preprocess: '预处理', detect: '探测', mine: '挖掘', deepmine: '深度挖掘', verify: '验证' }
 
 function fmtDuration(ms?: number | null): string {
   if (!ms) return '-'
@@ -26,7 +26,6 @@ function fmtDuration(ms?: number | null): string {
 
 export default function TrajectoryView({ trajectory }: { trajectory: Trajectory }) {
   const { stages, stats } = trajectory
-  const stageKeys = (['mine', 'verify', 'detect'] as const).filter((k) => stages[k]?.length)
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,26 +51,12 @@ export default function TrajectoryView({ trajectory }: { trajectory: Trajectory 
         </div>
       )}
 
-      {/* 阶段轨迹 */}
-      {stageKeys.length === 0 ? (
-        <div className="text-sm text-[var(--text-muted)] p-4 rounded-[var(--radius-sm)] border border-[var(--border)]">
-          无关联的挖掘 session（该 finding 可能无 task_id，或未跑验证/探测阶段）
-        </div>
-      ) : (
-        stageKeys.map((stage) => (
-          <div key={stage} className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold text-[var(--text)]">
-              {STAGE_LABEL[stage]}
-              <span className="text-[var(--text-muted)] font-normal"> · {stages[stage].length} session</span>
-            </h3>
-            {stages[stage].map((sess) => (
-              <StageCard key={sess.task_id || sess.session_id || Math.random()} session={sess} />
-            ))}
-          </div>
-        ))
-      )}
-
       <Legend />
+
+      {/* 阶段轨迹（固定 5 阶段，可折叠，空阶段显示解释） */}
+      {(['preprocess', 'detect', 'mine', 'deepmine', 'verify'] as const).map((stage) => (
+        <StageSection key={stage} stage={stage} sessions={(stages as Record<string, TraceStage[]>)[stage] || []} />
+      ))}
     </div>
   )
 }
@@ -81,6 +66,40 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
     <div className="flex flex-col gap-0.5 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-card)] border border-[var(--border)]">
       <span className="text-xs text-[var(--text-muted)]">{label}</span>
       <span className="text-lg font-bold font-mono tabular-nums">{value}</span>
+    </div>
+  )
+}
+
+const EMPTY_REASON: Record<string, string> = {
+  preprocess: '该项目未跑预处理阶段（无 preprocessing session）',
+  detect: '未关联到该 finding 的探测 session——detect 按子类型批量探测，单个 detection_id 不在 session 文本中；需 finding 带 detection_source_task_id（已向图灵提诉求）才能精确关联',
+  mine: '未关联到该 finding 的挖掘 session（finding.task_id 未命中任何 mining session）',
+  deepmine: '该项目无横向处理（horizontal_processing）阶段',
+  verify: '未关联到该 finding 的验证 session（无 validation_<finding_id>，或该 finding 未跑验证）',
+}
+
+function StageSection({ stage, sessions }: { stage: string; sessions: TraceStage[] }) {
+  const [open, setOpen] = useState(true)
+  const stepCount = sessions.reduce((n, s) => n + s.steps.length, 0)
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden">
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-[var(--bg-card2)] transition-colors">
+        <span className="text-sm font-semibold text-[var(--text)]">{STAGE_LABEL[stage] || stage}</span>
+        <span className="text-xs text-[var(--text-muted)]">
+          {sessions.length > 0 ? `${sessions.length} session · ${stepCount} 步` : '无数据'}
+          <span className="ml-2">{open ? '▾' : '▸'}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 py-2 border-t border-[var(--border)] flex flex-col gap-2">
+          {sessions.length === 0 ? (
+            <div className="text-xs text-[var(--text-muted)] py-2 leading-relaxed">{EMPTY_REASON[stage] || '无关联 session'}</div>
+          ) : sessions.map((sess) => (
+            <StageCard key={sess.task_id || sess.session_id || Math.random()} session={sess} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -759,6 +759,8 @@ def trace_for_finding():
     task_id = request.args.get('task_id')
     finding_id = request.args.get('finding_id')
     vuln_type = request.args.get('vuln_type')
+    detection_id = request.args.get('detection_id')
+    detection_source_task_id = request.args.get('detection_source_task_id')
     root = _root_path()
     if not report_name or not dataset_name or not task_id:
         return jsonify({'error': 'report_name, dataset_name, task_id are required'}), 400
@@ -781,7 +783,7 @@ def trace_for_finding():
 
         sessions_resp = _run_async(_fetch())
         sessions = (sessions_resp or {}).get('sessions') or []
-        traj = trace_view.sessions_to_trajectory(sessions, task_id, finding_id, vuln_type)
+        traj = trace_view.sessions_to_trajectory(sessions, task_id, finding_id, vuln_type, detection_id, detection_source_task_id)
         return jsonify(traj), 200
     except Exception as e:
         logger.error(f'trace/for-finding failed: {e}', exc_info=True)

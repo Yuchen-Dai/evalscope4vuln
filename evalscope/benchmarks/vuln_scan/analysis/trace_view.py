@@ -138,8 +138,10 @@ def stage_for_session(session: dict) -> str:
         return 'verify'
     if 'detection' in tt:
         return 'detect'
-    if 'classification' in tt:
+    if 'preprocess' in tt:
         return 'preprocess'
+    if 'classification' in tt:
+        return 'classify'
     if 'horizontal' in tt:
         return 'deepmine'
     return 'other'
@@ -160,16 +162,57 @@ def _session_stats(session: dict) -> dict:
     }
 
 
-def sessions_to_trajectory(sessions: list[dict], task_id: str | None,
-                           finding_id: str | None, vuln_type: str | None) -> dict:
-    """关联 finding 到各阶段 session + 适配 step + 统计。
+def _session_blob(s: dict) -> str:
+    """session 的 prompt + parts 文本（用于 detection_id 等关联搜索）。"""
+    msg = s.get('session') or {}
+    parts = msg.get('parts') or []
+    texts: list[str] = []
+    for p in parts:
+        if not isinstance(p, dict):
+            continue
+        t = p.get('type')
+        if t in ('reasoning', 'text'):
+            texts.append(p.get('text', '') or '')
+        elif t == 'tool':
+            texts.append(json.dumps(p.get('input') or p.get('args') or {}, ensure_ascii=False))
+    return '\n'.join([s.get('prompt') or ''] + texts)
 
-    关联：mine = session.task_id == task_id（精确 1:1）；
-          verify = task_type/prompt 含 finding_id（validation_<finding_id>）；
-          detect = task_type 含 taint_detection_*_<vuln_type>（粗关联，该漏洞类型的批量探测）。
-    返回 {stages:{mine/verify/detect: [{task_id, task_type, session_id, steps[]}]}, stats:{...}}。
+
+def _extract_story(stages: dict) -> list[str]:
+    """从各阶段 conclusion/思考提炼故事线（每阶段一句，粗版不调 LLM）。"""
+    labels = {'preprocess': '预处理', 'detect': '探测', 'mine': '挖掘', 'deepmine': '深挖', 'verify': '验证'}
+    story: list[str] = []
+    for stage in ('preprocess', 'detect', 'mine', 'deepmine', 'verify'):
+        sess_list = stages.get(stage) or []
+        if not sess_list:
+            continue
+        sent = ''
+        for pref in ('conclusion', 'thought', 'text'):
+            for sess in sess_list:
+                for st in sess.get('steps', []):
+                    if st.get('type') == pref and (st.get('summary') or st.get('detail')):
+                        sent = st.get('summary') or (st.get('detail') or '')[:80]
+                        break
+                if sent:
+                    break
+            if sent:
+                break
+        if sent:
+            story.append(f'[{labels.get(stage, stage)}] {sent}')
+    return story
+
+
+def sessions_to_trajectory(sessions: list[dict], task_id: str | None,
+                           finding_id: str | None, vuln_type: str | None,
+                           detection_id: str | None = None,
+                           detection_source_task_id: str | None = None) -> dict:
+    """关联 finding 到各阶段 session + 适配 step + 统计 + 故事线（仿 index.html 5 阶段）。
+
+    阶段：preprocess/deepmine 全局共享；detect 优先 detection_source_task_id 精确匹配（图灵支持后），
+    兜底 detection_id 搜文本；mine=task_id；verify=finding_id。
+    返回 {stages:{preprocess/detect/mine/deepmine/verify}, stats, story}。
     """
-    stages: dict[str, list[dict]] = {'mine': [], 'verify': [], 'detect': []}
+    stages: dict[str, list[dict]] = {'preprocess': [], 'detect': [], 'mine': [], 'deepmine': [], 'verify': []}
     all_steps: list[dict] = []
     total_input = total_output = 0
     total_dur_ms = 0
@@ -179,24 +222,26 @@ def sessions_to_trajectory(sessions: list[dict], task_id: str | None,
     for s in sessions or []:
         stage = stage_for_session(s)
         matched = False
-        if stage == 'mine' and task_id and s.get('task_id') == task_id:
+        if stage in ('preprocess', 'deepmine'):
             matched = True
-        elif stage == 'verify' and finding_id:
-            hay = (s.get('task_type') or '') + ' ' + (s.get('prompt') or '')
-            if finding_id in hay:
-                matched = True
-        elif stage == 'detect' and vuln_type:
-            if vuln_type.lower() in (s.get('task_type') or '').lower():
-                matched = True
+        elif stage == 'mine' and task_id and s.get('task_id') == task_id:
+            matched = True
+        elif stage == 'verify' and finding_id and finding_id in ((s.get('task_type') or '') + (s.get('prompt') or '')):
+            matched = True
+        elif stage == 'detect':
+            if detection_source_task_id and s.get('task_id') == detection_source_task_id:
+                matched = True  # 精确（图灵支持 detection_source_task_id）
+            elif detection_id and detection_id in ((s.get('prompt') or '') + _session_blob(s)):
+                matched = True  # 兜底（detection_id 搜文本）
+        else:
+            matched = False
         if not matched:
             continue
 
         steps = session_to_steps(s)
         stages[stage].append({
-            'task_id': s.get('task_id'),
-            'task_type': s.get('task_type'),
-            'session_id': s.get('session_id'),
-            'steps': steps,
+            'task_id': s.get('task_id'), 'task_type': s.get('task_type'),
+            'session_id': s.get('session_id'), 'steps': steps,
         })
         all_steps.extend(steps)
         sstat = _session_stats(s)
@@ -220,4 +265,4 @@ def sessions_to_trajectory(sessions: list[dict], task_id: str | None,
         'tokens_output': total_output,
         'tool_distribution': dict(sorted(tool_counter.items(), key=lambda x: -x[1])),
     }
-    return {'stages': stages, 'stats': stats}
+    return {'stages': stages, 'stats': stats, 'story': _extract_story(stages)}

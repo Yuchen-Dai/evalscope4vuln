@@ -214,6 +214,8 @@ export async function getTraceForFinding(
   taskId: string,
   findingId?: string,
   vulnType?: string,
+  detectionId?: string,
+  detectionSourceTaskId?: string,
   signal?: AbortSignal,
 ): Promise<Trajectory> {
   return apiValidated(`${BASE}/trace/for-finding`, trajectorySchema, {
@@ -221,6 +223,8 @@ export async function getTraceForFinding(
       root_path: rootPath, report_name: reportName, dataset_name: datasetName, task_id: taskId,
       ...(findingId ? { finding_id: findingId } : {}),
       ...(vulnType ? { vuln_type: vulnType } : {}),
+      ...(detectionId ? { detection_id: detectionId } : {}),
+      ...(detectionSourceTaskId ? { detection_source_task_id: detectionSourceTaskId } : {}),
     },
     signal,
   })
