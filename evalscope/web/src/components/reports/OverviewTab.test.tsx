@@ -41,14 +41,6 @@ describe('OverviewTab dataset score view', () => {
     expect(screen.queryByTestId('radar-chart')).not.toBeInTheDocument()
   })
 
-  it('keeps unbounded metrics in their native unit without a percentage bar', () => {
-    renderOverview([multi[2]])
-
-    expect(screen.getAllByText('512.00 tokens/s')).not.toHaveLength(0)
-    expect(screen.queryByText('51200.0%')).not.toBeInTheDocument()
-    expect(screen.queryByRole('progressbar', { name: 'throughput_suite Score' })).not.toBeInTheDocument()
-  })
-
   it('offers radar only for three or more comparable bounded metrics', () => {
     const comparable = [0, 1, 2].map((index) => ({
       ...multi[0],

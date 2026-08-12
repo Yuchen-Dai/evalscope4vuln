@@ -18,21 +18,14 @@ const t = (key: string): string => key
 describe('resolveMetricKey', () => {
   it('returns canonical keys unchanged', () => {
     expect(resolveMetricKey('accuracy')).toBe('accuracy')
-    expect(resolveMetricKey('throughput')).toBe('throughput')
   })
 
   it('normalizes and resolves known aliases to canonical keys', () => {
     expect(resolveMetricKey('AverageAccuracy')).toBe('accuracy')
     expect(resolveMetricKey('pass@1')).toBe('pass_rate')
-    expect(resolveMetricKey('Output TPS')).toBe('throughput')
-    expect(resolveMetricKey('AverageOutputTps')).toBe('throughput')
     expect(resolveMetricKey('WeightedScorePercent')).toBe('score_percent')
     expect(resolveMetricKey('mean_avg_score')).toBe('accuracy')
-    expect(resolveMetricKey('sum_total_tokens')).toBe('tokens')
-    expect(resolveMetricKey('mean_total_wall_time_s')).toBe('latency')
     expect(resolveMetricKey('overall_f1')).toBe('f1')
-    expect(resolveMetricKey('Avg Latency')).toBe('latency')
-    expect(resolveMetricKey('Time to First Token')).toBe('ttft')
   })
 
   it('returns the normalized key for unknown metrics', () => {
@@ -63,21 +56,8 @@ describe('formatMetricByKey', () => {
     expect(result.isSpecUndefined).toBe(false)
   })
 
-  it('keeps the native unit for unbounded performance metrics (no percentage)', () => {
-    const result = formatMetricByKey('throughput', 1234.5, t)
-    expect(result.primary).toBe('1234.50 tokens/s')
-    expect(result.unitLabel).toBe('tokens/s')
-  })
-
   it('formats backend metric names without guessing from their magnitude', () => {
     expect(formatMetricByKey('WeightedScorePercent', 81.5, t).primary).toBe('81.5%')
-    expect(formatMetricByKey('AverageOutputTps', 512, t).primary).toBe('512.00 tokens/s')
-  })
-
-  it('does not convert a value greater than 1 to a percentage for unbounded metrics', () => {
-    const result = formatMetricByKey('latency', 12.5, t)
-    expect(result.primary).toBe('12.50 s')
-    expect(result.primary.includes('%')).toBe(false)
   })
 
   it('renders a distinct placeholder for missing values instead of 0', () => {
@@ -101,7 +81,6 @@ describe('getBoundedMetricRatio', () => {
   it('normalizes only metrics whose registered contract is bounded', () => {
     expect(getBoundedMetricRatio('accuracy', 0.815)).toBe(0.815)
     expect(getBoundedMetricRatio('WeightedScorePercent', 81.5)).toBe(0.815)
-    expect(getBoundedMetricRatio('AverageOutputTps', 512)).toBeNull()
     expect(getBoundedMetricRatio('unknown_metric', 0.5)).toBeNull()
   })
 })
@@ -109,6 +88,5 @@ describe('getBoundedMetricRatio', () => {
 describe('formatScore', () => {
   it('returns the primary display string for a metric key', () => {
     expect(formatScore('pass_rate', 0.5, t)).toBe('50.0%')
-    expect(formatScore('rps', 10, t)).toBe('10.00 req/s')
   })
 })

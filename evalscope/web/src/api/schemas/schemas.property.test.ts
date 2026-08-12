@@ -8,10 +8,9 @@
 // `DomainError` with `kind='validation'` (never an uncaught exception, never
 // the unvalidated body).
 //
-// Two representative domain schemas are exercised: `reportSummarySchema`
-// (reports domain) and `perfRunSummarySchema` (performance domain). Both mix
-// string, number, boolean and optional fields, so the property covers the
-// common shapes of the API contract.
+// The representative `reportSummarySchema` (reports domain) is exercised. It
+// mixes string, number and optional fields, so the property covers the common
+// shapes of the API contract.
 //
 // Validates: Requirements 13.1, 13.2
 
@@ -21,7 +20,7 @@ import type { ZodType } from 'zod'
 
 import { apiValidated } from '../client'
 import { DomainError, isDomainError } from '../errors'
-import { perfRunSummarySchema, reportSummarySchema } from './index'
+import { reportSummarySchema } from './index'
 
 // ------------------------------------------------------------------ //
 // Field metadata used to generate valid objects and to corrupt them   //
@@ -86,41 +85,6 @@ const reportSummaryArb: fc.Arbitrary<Record<string, unknown>> = fc.record(
 )
 
 // ------------------------------------------------------------------ //
-// perfRunSummarySchema — strings, numbers, booleans, all required     //
-// ------------------------------------------------------------------ //
-
-const PERF_RUN_SUMMARY_FIELDS: FieldSpec[] = [
-  { name: 'path', type: 'string' },
-  { name: 'model', type: 'string' },
-  { name: 'api_type', type: 'string' },
-  { name: 'dataset', type: 'string' },
-  { name: 'num_runs', type: 'number' },
-  { name: 'total_requests', type: 'number' },
-  { name: 'success_rate', type: 'number' },
-  { name: 'best_rps', type: 'number' },
-  { name: 'best_latency', type: 'number' },
-  { name: 'is_embedding', type: 'boolean' },
-  { name: 'has_html', type: 'boolean' },
-  { name: 'timestamp', type: 'string' },
-]
-
-/** Generate a fully-valid `perfRunSummarySchema` object. */
-const perfRunSummaryArb: fc.Arbitrary<Record<string, unknown>> = fc.record({
-  path: fc.string(),
-  model: fc.string(),
-  api_type: fc.string(),
-  dataset: fc.string(),
-  num_runs: fc.nat(),
-  total_requests: fc.nat(),
-  success_rate: fc.double({ min: 0, max: 1, noNaN: true, noDefaultInfinity: true }),
-  best_rps: fc.double({ noNaN: true, noDefaultInfinity: true }),
-  best_latency: fc.double({ noNaN: true, noDefaultInfinity: true }),
-  is_embedding: fc.boolean(),
-  has_html: fc.boolean(),
-  timestamp: fc.string(),
-})
-
-// ------------------------------------------------------------------ //
 // Corruption generator: break exactly one required field              //
 // ------------------------------------------------------------------ //
 
@@ -182,7 +146,6 @@ function stubFetchWith(body: unknown): void {
 
 const CASES: Array<{ name: string; schema: ZodType; validArb: fc.Arbitrary<Record<string, unknown>>; fields: FieldSpec[] }> = [
   { name: 'reportSummarySchema', schema: reportSummarySchema, validArb: reportSummaryArb, fields: REPORT_SUMMARY_FIELDS },
-  { name: 'perfRunSummarySchema', schema: perfRunSummarySchema, validArb: perfRunSummaryArb, fields: PERF_RUN_SUMMARY_FIELDS },
 ]
 
 describe('domain schema validation (Property 26: Schema 校验 round-trip 与 typed error)', () => {

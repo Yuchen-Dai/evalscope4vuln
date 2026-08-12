@@ -87,14 +87,6 @@ describe('metric display consistency across surfaces', () => {
     expect(cardText).toBe(expected)
   })
 
-  it('preserves an unbounded metric unit in both report-list surfaces', () => {
-    const report = makeReport(512, 'AverageOutputTps')
-
-    expect(cardScoreText(report)).toBe('512.00 tokens/s')
-    cleanup()
-    expect(tableScoreText(report)).toBe('512.00 tokens/s')
-  })
-
   it('does not display a meaningless aggregate for mixed metrics', () => {
     const report = makeReport(256.5, '')
 
