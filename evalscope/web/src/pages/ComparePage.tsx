@@ -4,6 +4,8 @@ import { useReports } from '@/contexts/ReportsContext'
 import { useQueryParams } from '@/hooks/useQueryParams'
 import { getPredictions, getChartUrl } from '@/api/reports'
 import TraceCompareTab from '@/components/reports/TraceCompareTab'
+import VulnFindingsCompareView from '@/components/reports/VulnFindingsCompareView'
+import VulnTypeCompareView from '@/components/reports/VulnTypeCompareView'
 import type { ReportData, PredictionRow } from '@/api/types'
 import { getDisplayNames, parseReportName } from '@/utils/reportParser'
 import { buildDisplayLabel, compatibilityReason } from '@/domain/compare/compareModel'
@@ -87,7 +89,7 @@ export default function ComparePage() {
 
   // State
   const [reports, setReports] = useState<ReportData[]>([])
-  const [activeTab, setActiveTab] = useState<'score' | 'prediction' | 'trace'>('score')
+  const [activeTab, setActiveTab] = useState<'score' | 'prediction' | 'type' | 'trace'>('score')
   const [dataLoaded, setDataLoaded] = useState(false)
   const [scoreLoadError, setScoreLoadError] = useState('')
   const [scoreReloadToken, setScoreReloadToken] = useState(0)
@@ -211,8 +213,18 @@ export default function ComparePage() {
 
   useEffect(() => {
     const applyDefault = () => {
-      if (activeTab === 'prediction' && predCommonDatasets.length > 0 && !selectedDs) {
-        setSelectedDs(predCommonDatasets[0])
+      // prediction 与 type（按类型对比）tab 都消费 mergedPredictions；
+      // type tab 优先选共同 vuln_ 数据集（无则回退首个共同数据集 → 空态提示）。
+      if (predCommonDatasets.length === 0) return
+      const firstVuln = predCommonDatasets.find((ds) => ds.startsWith('vuln_'))
+      if (!selectedDs) {
+        setSelectedDs(
+          activeTab === 'type' ? (firstVuln ?? predCommonDatasets[0]) : predCommonDatasets[0],
+        )
+      } else if (activeTab === 'type' && firstVuln && selectedDs !== firstVuln && !selectedDs.startsWith('vuln_')) {
+        // 进入按类型对比时若停在非 vuln 数据集，自动切到首个共同 vuln 数据集。
+        setSelectedDs(firstVuln)
+        setSelectedSubset('')
       }
     }
     applyDefault()
@@ -437,10 +449,11 @@ export default function ComparePage() {
         tabs={[
           { key: 'score', label: t('compare.scoreComparison'), panelId: 'compare-score-panel' },
           { key: 'prediction', label: t('compare.predictionComparison'), panelId: 'compare-prediction-panel' },
+          { key: 'type', label: t('compare.typeComparison'), panelId: 'compare-type-panel' },
           { key: 'trace', label: t('compare.trajectoryComparison'), panelId: 'compare-trace-panel' },
         ]}
         activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'score' | 'prediction' | 'trace')}
+        onChange={(k) => setActiveTab(k as 'score' | 'prediction' | 'type' | 'trace')}
         panels={{
           'compare-score-panel': loading && !dataLoaded ? (
             <div className="flex flex-col gap-4">
@@ -485,6 +498,22 @@ export default function ComparePage() {
               page={page}
               setPage={setPage}
               totalPages={totalPages}
+              predictionsLoading={predictionsLoading}
+              predictionsError={predictionsError}
+              onRetryPredictions={() => setPredictionsReloadToken((value) => value + 1)}
+              t={t}
+            />
+          ),
+          'compare-type-panel': (
+            <TypeTab
+              reportNames={reportNames}
+              displayNames={displayNames}
+              displayLabels={displayLabels}
+              predCommonDatasets={predCommonDatasets}
+              selectedDs={selectedDs}
+              setSelectedDs={setSelectedDs}
+              setSelectedSubset={setSelectedSubset}
+              mergedPredictions={mergedPredictions}
               predictionsLoading={predictionsLoading}
               predictionsError={predictionsError}
               onRetryPredictions={() => setPredictionsReloadToken((value) => value + 1)}
@@ -691,8 +720,17 @@ function PredictionTab({
   const isAllAbove = reportNames.every((n) => (perModelFilter[n] ?? 'any') === 'above')
   const isAllBelow = reportNames.every((n) => (perModelFilter[n] ?? 'any') === 'below')
 
+  // vuln_ 数据集：切换为漏洞结果对照视图（GT 对齐），不走 ChatView 逐样本并排。
+  const isVuln = selectedDs.startsWith('vuln_')
+  // vuln 形态不受 ChatView 视图筛选（阈值/above/below）影响：直接按页码取合并行。
+  const vulnRow = mergedPredictions.length
+    ? mergedPredictions[Math.min(page - 1, mergedPredictions.length - 1)]
+    : null
+
   // ── Keyboard navigation ─────────────────────────────────────────
+  // vuln 形态按 gt 浏览、无逐样本分页，箭头翻页只在非 vuln 形态挂载。
   useEffect(() => {
+    if (isVuln) return
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'ArrowLeft' && page > 1) setPage(page - 1)
@@ -700,7 +738,7 @@ function PredictionTab({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [page, totalPages, setPage])
+  }, [isVuln, page, totalPages, setPage])
 
   if (predCommonDatasets.length === 0) {
     return (
@@ -724,7 +762,7 @@ function PredictionTab({
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ── Dataset / Subset / Threshold ── */}
+      {/* ── Dataset / Subset / Threshold（vuln 形态隐藏阈值，只选数据集/子集）── */}
       <Card>
         <div className="flex flex-wrap items-end gap-4">
           <div className="min-w-[200px] flex-1">
@@ -747,29 +785,43 @@ function PredictionTab({
               />
             </div>
           )}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="compare-score-threshold"
-              className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]"
-            >
-              {t('compare.scoreThreshold')}
-            </label>
-            <input
-              id="compare-score-threshold"
-              name="compare-score-threshold"
-              type="number"
-              value={threshold}
-              step={0.01}
-              min={0}
-              max={1}
-              onChange={(e) => { setThreshold(Number(e.target.value)); setPage(1) }}
-              className="w-24 px-3 py-2 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
+          {!isVuln && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="compare-score-threshold"
+                className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]"
+              >
+                {t('compare.scoreThreshold')}
+              </label>
+              <input
+                id="compare-score-threshold"
+                name="compare-score-threshold"
+                type="number"
+                value={threshold}
+                step={0.01}
+                min={0}
+                max={1}
+                onChange={(e) => { setThreshold(Number(e.target.value)); setPage(1) }}
+                className="w-24 px-3 py-2 text-sm rounded-[var(--radius-sm)] bg-[var(--bg-deep)] border border-[var(--border)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+          )}
         </div>
       </Card>
 
-      {/* ── Per-model Filter Section ── */}
+      {/* ── vuln_ 数据集：漏洞结果对照（GT 对齐 + N 列 finding 并排）── */}
+      {isVuln && !predictionsLoading && !predictionsError && (
+        <VulnFindingsCompareView
+          models={reportNames.map((name) => ({
+            name,
+            label: displayLabels[name] ?? displayNames[name] ?? name,
+            row: vulnRow?.models[name],
+          }))}
+        />
+      )}
+
+      {/* ── Per-model Filter Section（非 vuln 形态）── */}
+      {!isVuln && (
       <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] p-4 flex flex-col gap-3">
         {/* Quick preset row */}
         <div className="flex items-center gap-3 flex-wrap">
@@ -854,9 +906,10 @@ function PredictionTab({
           })}
         </div>
       </div>
+      )}
 
-      {/* ── Stats Bar + Pagination ── */}
-      {!predictionsLoading && mergedPredictions.length > 0 && (
+      {/* ── Stats Bar + Pagination（非 vuln 形态）── */}
+      {!isVuln && !predictionsLoading && mergedPredictions.length > 0 && (
         <div className="flex items-center justify-between px-4 py-2.5 rounded-[var(--radius)] bg-[var(--bg-card)] border border-[var(--border)] gap-2 flex-wrap">
           <span className="text-sm text-[var(--text-muted)]">
             {t('compare.showing')}{' '}
@@ -904,8 +957,8 @@ function PredictionTab({
         </ErrorAlert>
       )}
 
-      {/* ── ChatView Columns ── */}
-      {!predictionsLoading && currentRow && (
+      {/* ── ChatView Columns（非 vuln 形态）── */}
+      {!isVuln && !predictionsLoading && currentRow && (
         <div
           className="grid gap-4"
           style={{
@@ -971,10 +1024,102 @@ function PredictionTab({
         </Card>
       )}
 
-      {!predictionsLoading && !predictionsError && mergedPredictions.length > 0 && filtered.length === 0 && (
+      {!isVuln && !predictionsLoading && !predictionsError && mergedPredictions.length > 0 && filtered.length === 0 && (
         <Card>
           <EmptyStateSystem reason="no-match" context={{ view: 'compare' }} />
         </Card>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------ //
+// Type Comparison Tab（按类型对比，vuln 数据集）                        //
+// ------------------------------------------------------------------ //
+
+function TypeTab({
+  reportNames,
+  displayNames,
+  displayLabels,
+  predCommonDatasets,
+  selectedDs,
+  setSelectedDs,
+  setSelectedSubset,
+  mergedPredictions,
+  predictionsLoading,
+  predictionsError,
+  onRetryPredictions,
+  t,
+}: {
+  reportNames: string[]
+  displayNames: Record<string, string>
+  displayLabels: Record<string, string>
+  predCommonDatasets: string[]
+  selectedDs: string
+  setSelectedDs: (ds: string) => void
+  setSelectedSubset: (s: string) => void
+  mergedPredictions: MergedPrediction[]
+  predictionsLoading: boolean
+  predictionsError: string
+  onRetryPredictions: () => void
+  t: (p: string) => string
+}) {
+  // vuln 报告通常单样本（一个项目一次扫描）；多行时取第一个含 Findings 的行。
+  const firstVulnRow = mergedPredictions.find((row) =>
+    reportNames.some((name) => row.models[name]?.Findings),
+  )
+  const hasVulnDs = predCommonDatasets.some((ds) => ds.startsWith('vuln_'))
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* 数据集选择（仅共同 vuln_ 数据集） */}
+      {hasVulnDs && (
+        <Card>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="min-w-[200px] flex-1">
+              <Select
+                label={t('compare.selectDataset')}
+                options={predCommonDatasets
+                  .filter((ds) => ds.startsWith('vuln_'))
+                  .map((ds) => ({ value: ds, label: ds }))}
+                value={selectedDs}
+                onChange={(v) => { setSelectedDs(v); setSelectedSubset('') }}
+                placeholder={`-- ${t('compare.selectDataset')} --`}
+              />
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {!hasVulnDs && (
+        <Card>
+          <EmptyStateSystem
+            reason="no-match"
+            context={{ view: 'compare' }}
+            hint={t('vuln.noTypeBuckets')}
+          />
+        </Card>
+      )}
+
+      {predictionsLoading && <Skeleton height={400} />}
+
+      {predictionsError && (
+        <ErrorAlert className="flex items-center justify-between gap-3">
+          <span className="type-body-sm break-words">{predictionsError}</span>
+          <Button size="sm" variant="outline" onClick={onRetryPredictions}>
+            {t('common.retry')}
+          </Button>
+        </ErrorAlert>
+      )}
+
+      {!predictionsLoading && !predictionsError && hasVulnDs && (
+        <VulnTypeCompareView
+          models={reportNames.map((name) => ({
+            name,
+            label: displayLabels[name] ?? displayNames[name] ?? name,
+            row: firstVulnRow?.models[name],
+          }))}
+        />
       )}
     </div>
   )

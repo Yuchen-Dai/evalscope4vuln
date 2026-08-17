@@ -52,6 +52,12 @@ export const en: Dict = {
   fnAllErrorHint: '⚠ ${msg} (configure the Judge model via the ⚙ icon at the top right, then retry)',
   rawJson: 'Raw JSON (raw)',
   showingFirst: '(showing the first 500; narrow with filters)',
+  // 对比页漏洞结果对照 / 按类型对比
+  noGtData: 'No GT (vulnerability) data.',
+  source: 'Source',
+  sink: 'Sink',
+  callChain: 'Call chain',
+  noTypeBuckets: 'No per-type metrics (not a vuln dataset, or no buckets data).',
 }
 
 export const zh: Dict = {
@@ -104,4 +110,10 @@ export const zh: Dict = {
   fnAllErrorHint: '⚠ ${msg}（可在右上角 ⚙ 配置 Judge 模型后重试）',
   rawJson: '图灵原始返回（raw JSON）',
   showingFirst: '（仅显示前 500 条，用过滤缩小范围）',
+  // 对比页漏洞结果对照 / 按类型对比
+  noGtData: '无 GT（漏洞）数据。',
+  source: 'source 源点',
+  sink: 'sink 汇点',
+  callChain: 'call chain 调用链',
+  noTypeBuckets: '无按类型指标（非 vuln 数据集，或无 buckets 数据）。',
 }

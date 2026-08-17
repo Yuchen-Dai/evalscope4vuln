@@ -29,6 +29,8 @@ export const en: Dict = {
   sample: 'Target',
   maxThreeSelected: 'Only the first 3 will be compared.',
   trajectoryComparison: 'Trajectory Comparison',
+  typeComparison: 'By Type',
+  total: 'Total',
 }
 
 export const zh: Dict = {
@@ -60,4 +62,6 @@ export const zh: Dict = {
   sample: '目标',
   maxThreeSelected: '仅对比前 3 个。',
   trajectoryComparison: '挖掘轨迹对比',
+  typeComparison: '按类型对比',
+  total: '合计',
 }

@@ -265,6 +265,12 @@ const vulnFindingSchema = z.object({
   gt_id: z.string().nullable().optional(),
   classification_loc: z.enum(['TP', 'FP']).nullable().optional(),
   gt_id_loc: z.string().nullable().optional(),
+  // 数据流端点与调用链（data_utils 从 findings_raw 透传）。图灵侧可能是
+  // dict / JSON 字符串 / list[dict] / null，这里不收紧类型，渲染端用
+  // asEndpoint/chainSteps 收敛，避免字符串形态打挂整个响应校验。
+  source: z.unknown().nullable().optional(),
+  sink: z.unknown().nullable().optional(),
+  call_chain: z.unknown().nullable().optional(),
   raw: z.record(z.string(), z.unknown()).nullable().optional(),
 }).passthrough()
 
