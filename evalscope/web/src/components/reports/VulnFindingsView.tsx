@@ -36,6 +36,16 @@ const SEV_COLOR: Record<string, string> = {
   LOW: 'var(--text-muted)',
 }
 
+/** 按严重度分布的固定行序：CRITICAL→LOW，未知殿后。 */
+const SEV_DIST_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'] as const
+
+/** 严重度归一：大小写不敏感；MODERATE 视同 MEDIUM（与 SEV_COLOR 同口径）；缺失/离群值归 UNKNOWN。 */
+const normSev = (s?: string | null): string => {
+  const u = (s ?? '').trim().toUpperCase()
+  if (u === 'MODERATE') return 'MEDIUM'
+  return (SEV_DIST_ORDER as readonly string[]).includes(u) ? u : 'UNKNOWN'
+}
+
 export default function VulnFindingsView({
   predictions, regime, fnAdvice, analyzingGtIds, analyzingAll, fnRunning, fnAllError, onAnalyze, onAnalyzeAll, onStopFnAdvice,
 }: Props) {
@@ -78,6 +88,33 @@ export default function VulnFindingsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [f, regime],
   )
+
+  // 按严重度聚合（regime 感知）：TP=该级别命中 gt 数（matched 非空）、FN=该级别
+  // missed gt 数、FP=该级别 classification=FP 的 finding 数。条形分母为该级别 gt
+  // 总数，用于一眼看出哪个严重度漏报占比高（CRITICAL 漏报最危险）。全级别无
+  // 数据时返回空数组、整块隐藏。
+  const sevDist = useMemo(() => {
+    if (!f) return []
+    const rows = new Map<string, { gtTotal: number; tp: number; fn: number; fp: number }>()
+    const rowOf = (sev: string) => {
+      let r = rows.get(sev)
+      if (!r) { r = { gtTotal: 0, tp: 0, fn: 0, fp: 0 }; rows.set(sev, r) }
+      return r
+    }
+    f.gt.forEach((g) => {
+      const r = rowOf(normSev(g.severity))
+      r.gtTotal += 1
+      if (gtHitsOf(g).length > 0) r.tp += 1
+      if (missedOf(g)) r.fn += 1
+    })
+    f.findings.forEach((it) => {
+      if (classOf(it) === 'FP') rowOf(normSev(it.severity)).fp += 1
+    })
+    return SEV_DIST_ORDER
+      .map((sev) => ({ sev, ...(rows.get(sev) ?? { gtTotal: 0, tp: 0, fn: 0, fp: 0 }) }))
+      .filter((r) => r.gtTotal > 0 || r.fp > 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f, regime])
 
   const gtList = useMemo(() => {
     if (!f) return []
@@ -128,6 +165,55 @@ export default function VulnFindingsView({
         <Chip label={t('vuln.recallShort')} value={pct('Recall')} />
         <Chip label={t('vuln.f1Short')} value={pct('F1')} />
       </div>
+
+      {/* 按严重度分布：TP/FN(gt)/FP 计数 + FN 占该级别 gt 总数的比例条 */}
+      {sevDist.length > 0 && (
+        <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2">
+          <div className="text-xs text-[var(--text-muted)] mb-1.5">{t('vuln.sevDistTitle')}</div>
+          <div className="flex flex-col gap-1">
+            {sevDist.map((r) => {
+              const denom = r.gtTotal || 1
+              const tpW = (r.tp / denom) * 100
+              const fnW = (r.fn / denom) * 100
+              return (
+                <div key={r.sev} className="flex items-center gap-2 text-xs">
+                  <span
+                    className="w-[72px] shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded text-center"
+                    style={{ color: r.sev === 'UNKNOWN' ? 'var(--text-muted)' : sevColor(r.sev), border: '1px solid currentColor' }}
+                  >
+                    {r.sev === 'UNKNOWN' ? t('vuln.sevUnknown') : r.sev}
+                  </span>
+                  <div
+                    className="flex-1 h-2 rounded-full bg-[var(--bg-deep)] overflow-hidden flex"
+                    title={t('vuln.sevDistTip', { gt: r.gtTotal, tp: r.tp, fn: r.fn, fp: r.fp })}
+                  >
+                    {tpW > 0 && <div className="h-full bg-[var(--accent)]" style={{ width: `${tpW}%` }} />}
+                    {fnW > 0 && (
+                      <div
+                        className="h-full bg-[var(--danger)] rounded-r-full"
+                        // 2px 表面色间隙分隔堆叠段（tp 段存在时）
+                        style={tpW > 0 ? { width: `calc(${fnW}% - 2px)`, marginLeft: '2px' } : { width: `${fnW}%` }}
+                      />
+                    )}
+                  </div>
+                  <span className="shrink-0 tabular-nums whitespace-nowrap">
+                    <span className="text-[var(--text)]">{t('vuln.sevDistCounts', { tp: r.tp, gt: r.gtTotal, fn: r.fn, fp: r.fp })}</span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-1.5 flex items-center gap-3 text-[10px] text-[var(--text-muted)]">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-1.5 w-3 rounded-full bg-[var(--accent)]" />{t('vuln.tp')} / {t('vuln.gt')}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-1.5 w-3 rounded-full bg-[var(--danger)]" />{t('vuln.fn')} / {t('vuln.gt')}
+            </span>
+            <span>FP: {t('vuln.sevDistFpHint')}</span>
+          </div>
+        </div>
+      )}
 
       {/* scan / view / filter / type */}
       <div className="flex flex-wrap items-center gap-2">

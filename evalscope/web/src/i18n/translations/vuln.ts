@@ -52,6 +52,12 @@ export const en: Dict = {
   fnAllErrorHint: '⚠ ${msg} (configure the Judge model via the ⚙ icon at the top right, then retry)',
   rawJson: 'Raw JSON (raw)',
   showingFirst: '(showing the first 500; narrow with filters)',
+  // 按严重度分布（级别名本身保留英文原文，行业惯例不译）
+  sevDistTitle: 'Severity distribution',
+  sevUnknown: 'Unknown',
+  sevDistCounts: 'TP ${tp}/${gt} · FN ${fn} · FP ${fp}',
+  sevDistTip: 'GT: ${gt} · hit: ${tp} · missed: ${fn} · FP findings: ${fp}',
+  sevDistFpHint: 'count of FP findings, not part of the bar',
   // 对比页漏洞结果对照 / 按类型对比
   noGtData: 'No GT (vulnerability) data.',
   source: 'Source',
@@ -110,6 +116,12 @@ export const zh: Dict = {
   fnAllErrorHint: '⚠ ${msg}（可在右上角 ⚙ 配置 Judge 模型后重试）',
   rawJson: '图灵原始返回（raw JSON）',
   showingFirst: '（仅显示前 500 条，用过滤缩小范围）',
+  // 按严重度分布（级别名本身保留英文原文，行业惯例不译）
+  sevDistTitle: '按严重度分布',
+  sevUnknown: '未知',
+  sevDistCounts: 'TP ${tp}/${gt} · FN ${fn} · FP ${fp}',
+  sevDistTip: 'GT：${gt} · 命中：${tp} · 漏报：${fn} · FP finding：${fp}',
+  sevDistFpHint: 'FP finding 数，不计入条形',
   // 对比页漏洞结果对照 / 按类型对比
   noGtData: '无 GT（漏洞）数据。',
   source: 'source 源点',
