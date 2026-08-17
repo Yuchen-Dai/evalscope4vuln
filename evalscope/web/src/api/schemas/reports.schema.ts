@@ -322,6 +322,8 @@ export const analysisResponseSchema = z.object({
 export const fnAdviceSchema = z.object({
   gt_id: z.string(),
   advice: z.string().nullable().optional(),
+  /** 结构化分析（agent 输出 JSON 块提取；旧缓存/提取失败时缺失） */
+  advice_structured: z.record(z.string(), z.unknown()).nullable().optional(),
   status: z.enum(['ok', 'error']),
   error: z.string().nullable().optional(),
   related_files: z.array(z.string()).optional(),

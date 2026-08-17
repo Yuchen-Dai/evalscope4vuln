@@ -430,7 +430,22 @@ function EmptyDetail() {
   return <div className="text-sm text-[var(--text-muted)]">{t('vuln.selectHint')}</div>
 }
 
-/** FN 漏报 LLM 分析建议区块：触发按钮 + 建议/错误展示。 */
+/** advice_structured 的已知字段（后端 fn_advisor.extract_structured_advice 输出）。 */
+interface FnAdviceStructured {
+  category?: unknown
+  stages?: unknown
+  reasoning?: unknown
+  suggestions?: unknown
+  summary?: unknown
+}
+
+/** 结构化字段安全取值：字符串 strip；数组元素转非空字符串列表。 */
+const asStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+const asStrList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : []
+
+/** FN 漏报 LLM 分析建议区块：触发按钮 + 建议/错误展示（有 advice_structured 渲染
+ * 结构化卡片，旧缓存/解析失败回退纯文本 <pre>）。 */
 function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
   gtId: string
   advice?: FnAdvice
@@ -440,6 +455,13 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
   const { t } = useLocale()
   const [showFiles, setShowFiles] = useState(false)
   const files = advice?.related_files ?? []
+  const st = (advice?.advice_structured ?? null) as FnAdviceStructured | null
+  const stCategory = st ? asStr(st.category) : ''
+  const stStages = st ? asStrList(st.stages) : []
+  const stReasoning = st ? asStr(st.reasoning) : ''
+  const stSuggestions = st ? asStrList(st.suggestions) : []
+  const stSummary = st ? asStr(st.summary) : ''
+  const structuredOk = !!st && !!(stCategory || stStages.length || stReasoning || stSuggestions.length || stSummary)
   return (
     <div className="mt-1 pt-2 border-t border-[var(--border)]">
       <div className="flex items-center gap-2 mb-1">
@@ -481,7 +503,45 @@ function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
           ))}
         </div>
       )}
-      {advice?.status === 'ok' && advice.advice && (
+      {advice?.status === 'ok' && structuredOk && (
+        <div className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] flex flex-col gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-[var(--text-muted)]">{t('vuln.fnCategory')}</span>
+            {stCategory && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--danger)] text-white">{stCategory}</span>
+            )}
+            {stStages.length > 0 && (
+              <span className="flex flex-wrap items-center gap-1">
+                <span className="text-[10px] text-[var(--text-muted)]">{t('vuln.fnStages')}</span>
+                {stStages.map((s, i) => (
+                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-card2)] font-mono">{s}</span>
+                ))}
+              </span>
+            )}
+          </div>
+          {stReasoning && (
+            <div>
+              <div className="text-[10px] font-medium text-[var(--text-muted)] mb-0.5">{t('vuln.fnReasoning')}</div>
+              <p className="whitespace-pre-wrap break-words leading-relaxed">{stReasoning}</p>
+            </div>
+          )}
+          {stSuggestions.length > 0 && (
+            <div>
+              <div className="text-[10px] font-medium text-[var(--text-muted)] mb-0.5">{t('vuln.fnSuggestions')}</div>
+              <ul className="flex flex-col gap-1 list-disc pl-4">
+                {stSuggestions.map((s, i) => <li key={i} className="break-words leading-relaxed">{s}</li>)}
+              </ul>
+            </div>
+          )}
+          {stSummary && (
+            <div className="pt-1 border-t border-[var(--border)]">
+              <span className="text-[var(--text-muted)] mr-1">{t('vuln.fnSummary')}:</span>
+              <span className="font-medium">{stSummary}</span>
+            </div>
+          )}
+        </div>
+      )}
+      {advice?.status === 'ok' && advice.advice && !structuredOk && (
         <pre className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">{advice.advice}</pre>
       )}
     </div>

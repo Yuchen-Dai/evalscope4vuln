@@ -184,6 +184,27 @@ INSTRUCTION_TEMPLATE = """你是漏洞挖掘复盘专家。图灵（基于 openc
 注意：只做分析，不要修改任何文件。
 """
 
+# 输出契约（追加在 INSTRUCTION_TEMPLATE 之后）：要求 agent 最终回复以 JSON 代码块结尾，
+# 供 analyze_one 做 best-effort 结构化提取（extract_structured_advice）。
+# 独立常量而非并入模板：模板经 .format() 渲染，JSON 花括号需转义，分开拼接更直观。
+OUTPUT_CONTRACT = """
+
+## 输出格式（必须遵守）
+完成上述分析后，你的最终回复必须以一个 JSON 代码块结尾（```json 开头、``` 结束），结构与字段如下（字段名固定，值用中文，stages 取给定枚举值）：
+
+```json
+{
+  "category": "归因分类，从 探测阶段遗漏/挖掘深度不足/验证误判/知识库缺失/其他 中选一个",
+  "stages": ["涉及阶段，从 preprocess/detect/mine/deepmine/verify 中选与漏挖相关的，可多个"],
+  "reasoning": "漏挖原因分析（2-4 句，引用读到的具体代码行/记录）",
+  "suggestions": ["具体可执行的改进建议，逐条"],
+  "summary": "一句话结论"
+}
+```
+
+要求：JSON 必须是合法 JSON（无注释、无尾逗号、字符串内不要换行转义错误）；JSON 代码块之前可以有 markdown 分析过程。只做分析，不要修改任何文件。
+"""
+
 
 def _fmt_loc(loc: dict | None) -> str:
     if not loc:
@@ -194,7 +215,7 @@ def _fmt_loc(loc: dict | None) -> str:
 
 
 def build_instruction(fn: dict) -> str:
-    """构造给 opencode agent 的 instruction（漏洞信息 + 指向 ./repo 与 ./sessions.json）。"""
+    """构造给 opencode agent 的 instruction（漏洞信息 + 指向 ./repo 与 ./sessions.json + 输出契约）。"""
     files = relevant_files(fn)
     return INSTRUCTION_TEMPLATE.format(
         vuln_type=fn.get('vuln_type', '') or '（未知）',
@@ -203,14 +224,69 @@ def build_instruction(fn: dict) -> str:
         sink=_fmt_loc(fn.get('sink')),
         description=fn.get('description', '') or '（无）',
         files=', '.join(files) or '（无）',
-    )
+    ) + OUTPUT_CONTRACT
+
+
+# ```json ... ``` 代码块（非贪婪单块；契约要求 JSON 在末尾，匹配多个时先试最后一个）
+_JSON_FENCE_RE = re.compile(r'```json\s*(.*?)\s*```', re.DOTALL)
+# 裸 {...}：首个 { 到最后一个 }（首尾配对最宽容，容忍中间字符串里的花括号错位）
+_JSON_BARE_RE = re.compile(r'\{.*\}', re.DOTALL)
+
+# 结构化字段清洗：保留的顶层键 + 各字段类型
+_STRUCT_STRING_KEYS = ('category', 'reasoning', 'summary')
+_STRUCT_LIST_KEYS = ('stages', 'suggestions')
+
+
+def extract_structured_advice(text: str) -> dict | None:
+    """从 agent 输出 best-effort 提取结构化结论（```json 块优先，裸 {...} 兜底）。
+
+    json.loads 失败 / 非 dict / 无任何已知字段 → 放弃返回 None（调用方回退纯文本）。
+    已知字段按类型清洗（字符串 strip、列表元素转字符串），噪声键丢弃。
+    """
+    if not text:
+        return None
+    # 候选：所有 ```json 块（后优先，契约要求末尾输出）+ 裸 {...} 兜底
+    candidates: list[str] = [m.group(1) for m in _JSON_FENCE_RE.finditer(text)]
+    candidates.reverse()
+    bare = _JSON_BARE_RE.search(text)
+    if bare:
+        candidates.append(bare.group(0))
+    for cand in candidates:
+        try:
+            obj = json.loads(cand)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(obj, dict):
+            continue
+        out: dict = {}
+        for k in _STRUCT_STRING_KEYS:
+            v = obj.get(k)
+            if isinstance(v, str) and v.strip():
+                out[k] = v.strip()
+            elif v is not None and not isinstance(v, (dict, list)) and str(v).strip():
+                out[k] = str(v).strip()
+        for k in _STRUCT_LIST_KEYS:
+            v = obj.get(k)
+            if isinstance(v, list):
+                items = [str(x).strip() for x in v if str(x).strip()]
+                if items:
+                    out[k] = items
+            elif isinstance(v, str) and v.strip():
+                # agent 把数组写成单个字符串：按逗号/分号切
+                items = [s.strip() for s in re.split(r'[,;，；]', v) if s.strip()]
+                if items:
+                    out[k] = items
+        if out:
+            return out
+    return None
 
 
 async def analyze_one(fn: dict, workdir: str, jcfg: dict, sample_id: str) -> dict:
     """跑 opencode agent 分析单个 FN 漏洞（workdir 含 repo/ + sessions.json）。
 
     jcfg: {api_url, api_key, model_id}（judge 全局配置）。
-    返回 {gt_id, advice?, related_files, status, error?, ts}。
+    返回 {gt_id, advice?, advice_structured?, related_files, status, error?, ts}：
+    advice 为 agent 原文（保底），advice_structured 为提取出的结构化 dict（提取失败无此键）。
     """
     gt_id = fn.get('gt_id')
     files = relevant_files(fn)
@@ -245,5 +321,10 @@ async def analyze_one(fn: dict, workdir: str, jcfg: dict, sample_id: str) -> dic
     else:
         out['status'] = 'ok'
         out['advice'] = advice
-        logger.info(f'[fn_advisor] gt_id={gt_id} opencode 分析完成 (相关文件={len(files)})')
+        structured = extract_structured_advice(advice)
+        if structured:
+            out['advice_structured'] = structured
+            logger.info(f'[fn_advisor] gt_id={gt_id} opencode 分析完成 (相关文件={len(files)}, 结构化提取成功)')
+        else:
+            logger.info(f'[fn_advisor] gt_id={gt_id} opencode 分析完成 (相关文件={len(files)}, 结构化提取失败→纯文本)')
     return out

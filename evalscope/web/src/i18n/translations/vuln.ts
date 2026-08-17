@@ -50,6 +50,12 @@ export const en: Dict = {
   fnRelatedSessions: '${sessions} related sessions',
   fnRelatedFiles: 'Related files (${n})',
   fnAllErrorHint: '⚠ ${msg} (configure the Judge model via the ⚙ icon at the top right, then retry)',
+  // FN 结构化分析卡片
+  fnCategory: 'Attribution',
+  fnStages: 'Stages:',
+  fnReasoning: 'Root-cause analysis',
+  fnSuggestions: 'Improvement suggestions',
+  fnSummary: 'Conclusion',
   rawJson: 'Raw JSON (raw)',
   showingFirst: '(showing the first 500; narrow with filters)',
   // 按严重度分布（级别名本身保留英文原文，行业惯例不译）
@@ -114,6 +120,12 @@ export const zh: Dict = {
   fnRelatedSessions: '命中 ${sessions} 条相关 session',
   fnRelatedFiles: '相关文件 (${n})',
   fnAllErrorHint: '⚠ ${msg}（可在右上角 ⚙ 配置 Judge 模型后重试）',
+  // FN 结构化分析卡片
+  fnCategory: '归因分类',
+  fnStages: '涉及阶段:',
+  fnReasoning: '原因分析',
+  fnSuggestions: '改进建议',
+  fnSummary: '结论',
   rawJson: '图灵原始返回（raw JSON）',
   showingFirst: '（仅显示前 500 条，用过滤缩小范围）',
   // 按严重度分布（级别名本身保留英文原文，行业惯例不译）
