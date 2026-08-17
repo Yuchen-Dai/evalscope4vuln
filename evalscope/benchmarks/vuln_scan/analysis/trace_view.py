@@ -176,6 +176,8 @@ def session_to_steps(session: dict) -> list[dict]:
 def stage_for_session(session: dict) -> str:
     """task_type → 阶段名（mine/verify/detect/preprocess/deepmine/other）。"""
     tt = (session.get('task_type') or '').lower()
+    if tt.startswith('deep_mining'):
+        return 'deepmine'
     if tt.startswith('mining'):
         return 'mine'
     if tt.startswith('validation'):
@@ -322,7 +324,9 @@ def extract_finding_task_map(sessions: list[dict]) -> dict[str, dict]:
     """
     fmap: dict[str, dict] = {}
     for s in sessions or []:
-        if not (s.get('task_type') or '').startswith('mining'):
+        # deep_mining_*（横向深挖）也会 submit finding（如 F-285），须一并纳入反查
+        tt = (s.get('task_type') or '').lower()
+        if not (tt.startswith('mining') or tt.startswith('deep_mining')):
             continue
         parts = ((s.get('session') or {}).get('parts') or [])
         for p in parts:
