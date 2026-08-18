@@ -268,8 +268,10 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         mr, snap = mr_type, snap_type
 
         score = Score(extracted_prediction=filtered_prediction, prediction=original_prediction)
-        # F1 排首位：Report.score 取 metrics[0]（report.py:_set_score），首个 key
-        # 决定顶部 Overall Score 卡片显示哪个指标 → 让它显示主分数 F1 而非 Precision。
+        # F1 排首位：Report.score 取 metrics[0]（report.py:_set_score），故首个 key
+        # 保持 F1（compare/雷达图等消费 metrics[0]）。前端 Overall Score 卡片与评测
+        # 列表已改为按名选取 Overall/Coverage 展示（primaryMetricOf/_primary_metric），
+        # 不再依赖此顺序。
         # A 套（类型+位置，主分数）
         score.value.update({
             'Overall/F1': snap.f1,

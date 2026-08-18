@@ -26,6 +26,10 @@ describe('resolveMetricKey', () => {
     expect(resolveMetricKey('WeightedScorePercent')).toBe('score_percent')
     expect(resolveMetricKey('mean_avg_score')).toBe('accuracy')
     expect(resolveMetricKey('overall_f1')).toBe('f1')
+    // vuln benchmark 主展示指标：Overall/Coverage（含 LocOnly 前缀整串）
+    expect(resolveMetricKey('Coverage')).toBe('coverage')
+    expect(resolveMetricKey('Overall/Coverage')).toBe('coverage')
+    expect(resolveMetricKey('LocOnly/Overall/Coverage')).toBe('coverage')
   })
 
   it('returns the normalized key for unknown metrics', () => {
@@ -82,6 +86,11 @@ describe('getBoundedMetricRatio', () => {
     expect(getBoundedMetricRatio('accuracy', 0.815)).toBe(0.815)
     expect(getBoundedMetricRatio('WeightedScorePercent', 81.5)).toBe(0.815)
     expect(getBoundedMetricRatio('unknown_metric', 0.5)).toBeNull()
+  })
+
+  it('treats the vuln primary display metric as a bounded ratio', () => {
+    expect(getBoundedMetricRatio('Coverage', 0.642)).toBe(0.642)
+    expect(getBoundedMetricRatio('Overall/Coverage', 0.642)).toBe(0.642)
   })
 })
 

@@ -6,6 +6,7 @@ import { getChartUrl } from '@/api/reports'
 import Card from '@/components/ui/Card'
 import Table from '@/components/ui/Table'
 import { formatMetricByKey, getBoundedMetricRatio, getMetricSpec, resolveMetricKey } from '@/domain/metric/registry'
+import { primaryMetricOf } from '@/domain/metric/primaryScore'
 import PlotlyChart from '@/components/charts/PlotlyChart'
 import ReportSummaryStats from './ReportSummaryStats'
 import JsonViewer from '@/components/common/JsonViewer'
@@ -19,39 +20,17 @@ interface Props {
   regime?: 'type' | 'loc'
 }
 
-const LOC_ONLY_PREFIX = 'LocOnly/'
-
-// metric 名取末段（`LocOnly/Overall/F1` → `F1` / `Overall/F1` → `F1`）：
-// registry 按末段别名识别，全串 `LocOnly/Overall/F1` 归一成 `loconly_overall_f1`
-// 不在 registry/alias 表 → 误判非 bounded → 百分比/进度环失效。
-const lastSegment = (name: string): string => {
-  const i = name.lastIndexOf('/')
-  return i >= 0 ? name.slice(i + 1) : name
-}
-
-// 按 regime 取每个 report 的总体分数与 metric 名：type 用 report.score + metrics[0]；
-// loc 从 metrics 找 `LocOnly/${metrics[0].name}`，找不到回退 type 字段。
-function primaryOf(report: ReportData, regime: 'type' | 'loc'): { score: number; metricName: string } {
-  const typeMetricName = report.metrics[0]?.name ?? 'score'
-  if (regime === 'loc') {
-    const locName = `${LOC_ONLY_PREFIX}${typeMetricName}`
-    const m = report.metrics.find((x) => x.name === locName)
-    if (m) return { score: m.score, metricName: lastSegment(locName) }
-  }
-  return { score: report.score, metricName: typeMetricName }
-}
-
 export default function OverviewTab({ reports, reportName, rootPath, taskConfig, onDatasetClick, regime = 'type' }: Props) {
   const { t } = useLocale()
   const [scoreView, setScoreView] = useState<'table' | 'radar'>('table')
-  const metricKeys = reports.map((report) => resolveMetricKey(primaryOf(report, regime).metricName))
+  const metricKeys = reports.map((report) => resolveMetricKey(primaryMetricOf(report, regime).metricName))
   const canShowRadar = reports.length >= 3
     && metricKeys.every((key) => key === metricKeys[0])
     && getMetricSpec(metricKeys[0] ?? '').spec.boundedness === 'bounded'
 
   const tableData = useMemo(() => {
     return reports.map((r) => {
-      const p = primaryOf(r, regime)
+      const p = primaryMetricOf(r, regime)
       return {
         Dataset: r.dataset_name,
         Score: p.score,

@@ -15,6 +15,7 @@ import DetailsTab from '@/components/reports/DetailsTab'
 import PredictionsTab from '@/components/reports/PredictionsTab'
 import TrajectoryTab from '@/components/reports/TrajectoryTab'
 import { resolveMetricKey } from '@/domain/metric/registry'
+import { primaryMetricOf } from '@/domain/metric/primaryScore'
 
 type TabKey = 'overview' | 'details' | 'predictions' | 'trace'
 
@@ -76,26 +77,7 @@ export default function ReportDetailPage() {
   const modelName = reportList[0]?.model_name ?? reportName
   const primaryDataset = reportList[0]?.dataset_name ?? ''
 
-  // metrics[0].name 形如 `Overall/F1`（vuln benchmark）→ 取右段纯指标名，让
-  // formatMetricByKey 能识别（整串归一后不在 registry，进度环/百分比会失效）。
-  const mainMetricKey = (name?: string): string => {
-    if (!name) return 'score'
-    const idx = name.lastIndexOf('/')
-    return idx >= 0 ? name.slice(idx + 1) : name
-  }
-
-  // 按 regime 取一个 report 的「总体」分数：type 直接用 report.score；loc 从
-  // report.metrics 找 `LocOnly/${metrics[0].name}`（如 LocOnly/Overall/F1）的 score。
-  const reportScoreOf = (report: ReportData, reg: 'type' | 'loc'): number => {
-    if (reg === 'loc') {
-      const typeMetricName = report.metrics[0]?.name
-      const locName = typeMetricName ? `LocOnly/${typeMetricName}` : 'LocOnly/Overall/F1'
-      const m = report.metrics.find((x) => x.name === locName)
-      return m?.score ?? report.score
-    }
-    return report.score
-  }
-
+  // metrics 主指标选择见 primaryMetricOf（vuln 报告统一展示 Coverage）。
   // 是否展示 regime selector：含 vuln_ 数据集，且任一 report 的 metrics 出现 LocOnly/ 前缀。
   const showRegimeSelector = useMemo(() => {
     const hasVulnDs = reportList.some((r) => r.dataset_name.startsWith('vuln_'))
@@ -103,18 +85,23 @@ export default function ReportDetailPage() {
     return hasVulnDs && hasLocOnly
   }, [reportList])
 
+  // 顶部 Overall Score：各数据集主指标一致才可平均（vuln 报告即 Coverage 平均）。
   const overallMetric = useMemo(() => {
     if (reportList.length === 0) return { score: null, metricName: '' }
-    const metricNames = reportList.map((report) => mainMetricKey(report.metrics[0]?.name))
-    const firstKey = resolveMetricKey(metricNames[0])
-    if (!metricNames.every((name) => resolveMetricKey(name) === firstKey)) {
+    const entries = reportList.map((report) => primaryMetricOf(report, regime))
+    const firstKey = resolveMetricKey(entries[0].metricName)
+    if (!entries.every((entry) => resolveMetricKey(entry.metricName) === firstKey)) {
       return { score: null, metricName: '' }
     }
     return {
-      score: reportList.reduce((sum, report) => sum + reportScoreOf(report, regime), 0) / reportList.length,
-      metricName: metricNames[0],
+      score: entries.reduce((sum, entry) => sum + entry.score, 0) / entries.length,
+      metricName: entries[0].metricName,
     }
   }, [reportList, regime])
+
+  // 当前数据集的主指标（DetailsTab 的 Overall Score 卡片用）
+  const activeReport = reportList.find((x) => x.dataset_name === activeDataset)
+  const activePrimary = activeReport ? primaryMetricOf(activeReport, regime) : null
   const totalSamples = reportList.reduce((sum, r) => {
     return sum + (r.metrics[0]?.categories?.reduce((s, c) => s + c.num, 0) ?? 0)
   }, 0)
@@ -252,13 +239,8 @@ export default function ReportDetailPage() {
               reportName={reportName}
               datasetName={activeDataset}
               rootPath={rootPath}
-              overallScore={
-                (() => {
-                  const r = reportList.find((x) => x.dataset_name === activeDataset)
-                  return r ? reportScoreOf(r, regime) : undefined
-                })()
-              }
-              metricName={mainMetricKey(reportList.find((r) => r.dataset_name === activeDataset)?.metrics[0]?.name)}
+              overallScore={activePrimary?.score}
+              metricName={activePrimary?.metricName ?? 'score'}
               onSubsetClick={handleSubsetClick}
               regime={regime}
             />,

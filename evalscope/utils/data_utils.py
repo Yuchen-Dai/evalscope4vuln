@@ -82,6 +82,21 @@ def load_multi_report(root_path: str, report_names: List[str]):
     return report_list
 
 
+def primary_metric(report: Report):
+    """主展示指标：vuln 报告取 Overall/Coverage（评测列表/Overall Score/对比雷达图
+    统一展示覆盖率而非 F1，与前端 primaryMetricOf 同口径）；其余回退 metrics[0]
+    （Report.score 语义）。
+
+    Returns (score, metric_name)。
+    """
+    for m in report.metrics:
+        if m.name == 'Overall/Coverage':
+            return m.score, m.name
+    if report.metrics:
+        return report.score, report.metrics[0].name
+    return report.score, ''
+
+
 def get_acc_report_df(report_list: List[Report]):
     data_dict = []
     for report in report_list:
@@ -96,10 +111,12 @@ def get_acc_report_df(report_list: List[Report]):
                     }
                     data_dict.append(item)
         else:
+            # 主展示指标（vuln 报告为 Coverage），雷达图/分数图/对比表统一口径
+            score, _ = primary_metric(report)
             item = {
                 ReportKey.model_name: report.model_name,
                 ReportKey.dataset_name: report.dataset_name,
-                ReportKey.score: report.score,
+                ReportKey.score: score,
                 ReportKey.num: report.metrics[0].num,
             }
             data_dict.append(item)

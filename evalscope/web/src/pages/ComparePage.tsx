@@ -14,6 +14,7 @@ import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
 import { scoreColor } from '@/utils/colorScale'
 import { formatScore } from '@/domain/metric/registry'
+import { primaryMetricOf } from '@/domain/metric/primaryScore'
 import FilterChip from '@/components/ui/FilterChip'
 import Button from '@/components/ui/Button'
 import Select from '@/components/ui/Select'
@@ -155,7 +156,8 @@ export default function ComparePage() {
     for (const r of reports) {
       const key = (r as ReportData & { _reportName?: string })._reportName ?? r.model_name
       if (!byReport[key]) byReport[key] = {}
-      byReport[key][r.dataset_name] = r.score
+      // 主展示指标（vuln 报告为 Coverage），与评测列表/Overall Score 同口径
+      byReport[key][r.dataset_name] = primaryMetricOf(r, 'type').score
     }
 
     const reportKeys = reportNames.filter((n) => byReport[n])

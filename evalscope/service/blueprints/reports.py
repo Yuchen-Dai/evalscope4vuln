@@ -33,6 +33,7 @@ from evalscope.utils.data_utils import (
     load_multi_report,
     load_single_report,
     normalize_score,
+    primary_metric,
     process_report_name,
     scan_for_report_folders,
 )
@@ -162,6 +163,11 @@ def _extract_timestamp(report_name: str, root: str) -> str:
     return ''
 
 
+def _primary_metric(r: Report):
+    """主展示指标（vuln 报告为 Overall/Coverage，回退 metrics[0]）——见 data_utils.primary_metric。"""
+    return primary_metric(r)
+
+
 def _build_report_meta(report_name: str, root: str) -> dict:
     """Load a report and return lightweight metadata for the list endpoint."""
     try:
@@ -176,23 +182,24 @@ def _build_report_meta(report_name: str, root: str) -> dict:
     first = report_list[0]
     total_num = 0
     dataset_names = []
-    score_sum = 0.0
+    # 主展示指标逐 report 选取（读时选择，存量报告 metrics[0]=F1 也能切到 Coverage）
+    primary = [_primary_metric(r) for r in report_list]
     for r in report_list:
         dataset_names.append(r.dataset_name)
         total_num += r.num or 0
-        score_sum += r.score
 
-    avg_score = round(score_sum / len(report_list), 4) if report_list else 0.0
+    scores = [p[0] for p in primary]
+    avg_score = round(sum(scores) / len(report_list), 4) if report_list else 0.0
     timestamp = _extract_timestamp(report_name, root)
-    metric_names = [r.metrics[0].name for r in report_list if r.metrics]
+    metric_names = [p[1] for p in primary]
     metric_name = metric_names[0] if len(metric_names) == len(report_list) and all(
         name == metric_names[0] for name in metric_names
     ) else ''
 
     # Preserve each metric's native scale; consumers use metric_name to format it.
     dataset_scores = {}
-    for r in report_list:
-        dataset_scores[r.dataset_name] = round(r.score, 4) if r.score is not None else None
+    for r, (p_score, _pn) in zip(report_list, primary):
+        dataset_scores[r.dataset_name] = round(p_score, 4) if p_score is not None else None
 
     # Aggregate vuln-mining counts (TP/FP/FN) from the Overall/* metrics.
     # Non-vuln reports lack these entries; vuln_summary stays None so the
@@ -241,7 +248,7 @@ def _build_report_meta(report_name: str, root: str) -> dict:
         'vuln_summary': vuln_summary,
         # keep individual scores for per-dataset filtering
         '_datasets': dataset_names,
-        '_scores': [r.score for r in report_list],
+        '_scores': scores,
     }
 
 

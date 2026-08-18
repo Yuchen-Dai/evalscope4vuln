@@ -3,31 +3,11 @@ import { useLocale } from '@/contexts/LocaleContext'
 import type { ReportData } from '@/api/types'
 import { scoreColor } from '@/utils/colorScale'
 import { formatScore, getBoundedMetricRatio, resolveMetricKey } from '@/domain/metric/registry'
+import { primaryMetricOf } from '@/domain/metric/primaryScore'
 
 interface Props {
   reports: ReportData[]
   regime?: 'type' | 'loc'
-}
-
-const LOC_ONLY_PREFIX = 'LocOnly/'
-
-// metric 名取末段（`LocOnly/Overall/F1` → `F1`）：registry 按末段别名识别，
-// 全串归一成 `loconly_overall_f1` 不在 registry/alias 表 → 误判非 bounded
-// → 百分比缺失 + 进度环消失。type 模式的 `Overall/F1` 经 overall_f1 别名可识别。
-const lastSegment = (name: string): string => {
-  const i = name.lastIndexOf('/')
-  return i >= 0 ? name.slice(i + 1) : name
-}
-
-// 按 regime 取每个 report 的总体分数与 metric 名（与 OverviewTab.primaryOf 同语义）。
-function primaryOf(report: ReportData, regime: 'type' | 'loc'): { score: number; metricName: string } {
-  const typeMetricName = report.metrics[0]?.name ?? 'score'
-  if (regime === 'loc') {
-    const locName = `${LOC_ONLY_PREFIX}${typeMetricName}`
-    const m = report.metrics.find((x) => x.name === locName)
-    if (m) return { score: m.score, metricName: lastSegment(locName) }
-  }
-  return { score: report.score, metricName: typeMetricName }
 }
 
 /** SVG circular progress ring — 8px stroke (DESIGN.md `{components.score-ring}`). */
@@ -60,7 +40,7 @@ export default function ReportSummaryStats({ reports, regime = 'type' }: Props) 
     if (!reports.length) return null
 
     const entries = reports.map((report) => {
-      const p = primaryOf(report, regime)
+      const p = primaryMetricOf(report, regime)
       return { name: report.dataset_name, score: p.score, metricName: p.metricName }
     })
     const metricKey = resolveMetricKey(entries[0].metricName)

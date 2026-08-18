@@ -88,6 +88,15 @@ export const EVALUATION_METRIC_SPECS: MetricRegistry = {
     rawPrecision: DEFAULT_RAW_PRECISION,
     percentPrecision: DEFAULT_PERCENT_PRECISION,
   },
+  coverage: {
+    key: 'coverage',
+    labelKey: 'metrics.coverage',
+    boundedness: 'bounded',
+    direction: 'higher-is-better',
+    unit: null,
+    rawPrecision: DEFAULT_RAW_PRECISION,
+    percentPrecision: DEFAULT_PERCENT_PRECISION,
+  },
   score_percent: {
     key: 'score_percent',
     labelKey: 'metrics.accuracy',
@@ -145,6 +154,8 @@ const METRIC_ALIASES: Record<string, string> = {
   temporal_f1: 'f1',
   task_averaged_f1: 'f1',
   overall_f1: 'f1',
+  overall_coverage: 'coverage',
+  loconly_overall_coverage: 'coverage',
   weighted_score_percent: 'score_percent',
   weightedscorepercent: 'score_percent',
 }
