@@ -364,12 +364,53 @@ export const fnAdviceStopResponseSchema = z.object({
   task_id: z.string(),
 }).passthrough()
 
-/** 挖掘轨迹：一个 step 节点（opencode part 适配）。 */
+/**
+ * FN 轨迹分析：agent 重构的「中断轨迹」step（TraceStep 超集：新增 dead_end/briefing
+ * 类型 + stage/task_id/session_id 引用字段）。位于 advice_structured.trace 内，因来自
+ * agent 输出（MCP/stdout 双通道），消费侧用 safeParse 容错解析，不进响应级校验。
+ */
+export const fnTraceStepSchema = z.object({
+  id: z.string(),
+  type: z.enum(['thought', 'tool', 'finding', 'conclusion', 'text', 'dead_end', 'briefing']),
+  title: z.string(),
+  summary: z.string().optional(),
+  detail: z.string().optional(),
+  time: z.number().nullable().optional(),
+  tool: z.string().optional(),
+  file: z.string().optional(),
+  line: z.number().nullable().optional(),
+  stage: z.string().optional(),
+  task_id: z.string().nullable().optional(),
+  session_id: z.string().nullable().optional(),
+}).passthrough()
+
+/** FN 轨迹中断点（漏洞在哪一步中断导致漏挖）。 */
+export const fnTraceBreakpointSchema = z.object({
+  stage: z.string(),
+  step_id: z.string().nullable().optional(),
+  reason: z.string().optional(),
+  category: z.string().nullable().optional(),
+}).passthrough()
+
+/** FN 中断轨迹时间线（steps + breakpoint + story）。 */
+export const fnTraceSchema = z.object({
+  steps: z.array(fnTraceStepSchema),
+  breakpoint: fnTraceBreakpointSchema.optional(),
+  story: z.array(z.string()).optional(),
+}).passthrough()
+
+export type FnTrace = z.infer<typeof fnTraceSchema>
+export type FnTraceStep = z.infer<typeof fnTraceStepSchema>
+export type FnTraceBreakpoint = z.infer<typeof fnTraceBreakpointSchema>
+
+/** 挖掘轨迹：一个 step 节点（opencode part 适配）。type 枚举含 FN 中断轨迹新增的
+ * dead_end/briefing（服务端 trace_view 不产出，前端 TrajectoryView 渲染 agent 重构的
+ * FN 轨迹时会用到 —— 前端契约超集扩展，向后兼容）。 */
 export const traceStepSchema = z.object({
   id: z.string(),
-  type: z.enum(['thought', 'tool', 'finding', 'conclusion', 'text']),
+  type: z.enum(['thought', 'tool', 'finding', 'conclusion', 'text', 'dead_end', 'briefing']),
   title: z.string(),
-  summary: z.string(),
+  summary: z.string().optional(),
   detail: z.string().optional(),
   time: z.number().nullable().optional(),
   tool: z.string().optional(),

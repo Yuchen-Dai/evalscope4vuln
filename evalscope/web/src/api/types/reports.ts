@@ -33,6 +33,9 @@ export type {
   FnAdviceProgress,
   FnAdviceInvokeResponse,
   FnAdviceStopResponse,
+  FnTrace,
+  FnTraceStep,
+  FnTraceBreakpoint,
   // 挖掘轨迹展示
   Trajectory,
   TrajectoryCompare,

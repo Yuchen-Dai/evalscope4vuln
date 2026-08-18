@@ -26,8 +26,9 @@ export const en: Dict = {
   samples: 'Targets',
   subset: 'Subset',
   num: 'Count',
-  // 挖掘轨迹 tab 标签
+  // 挖掘轨迹 / 漏报分析 tab 标签
   trajectory: 'Trajectory',
+  fnAnalysis: 'FN Analysis',
 }
 
 export const zh: Dict = {
@@ -56,4 +57,5 @@ export const zh: Dict = {
   subset: '子集',
   num: '数量',
   trajectory: '挖掘轨迹',
+  fnAnalysis: '漏报分析',
 }

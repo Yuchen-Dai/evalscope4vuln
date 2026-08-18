@@ -14,10 +14,11 @@ import OverviewTab from '@/components/reports/OverviewTab'
 import DetailsTab from '@/components/reports/DetailsTab'
 import PredictionsTab from '@/components/reports/PredictionsTab'
 import TrajectoryTab from '@/components/reports/TrajectoryTab'
+import FnAnalysisTab from '@/components/reports/FnAnalysisTab'
 import { resolveMetricKey } from '@/domain/metric/registry'
 import { primaryMetricOf } from '@/domain/metric/primaryScore'
 
-type TabKey = 'overview' | 'details' | 'predictions' | 'trace'
+type TabKey = 'overview' | 'details' | 'predictions' | 'trace' | 'fn'
 
 export default function ReportDetailPage() {
   const { reportId } = useParams<{ reportId: string }>()
@@ -42,6 +43,7 @@ export default function ReportDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [activeDataset, setActiveDataset] = useState('')
   const [initialSubset, setInitialSubset] = useState<string | undefined>(undefined)
+  const [initialFnGt, setInitialFnGt] = useState<string | undefined>(undefined)
   const [regime, setRegime] = useState<'type' | 'loc'>('type')
 
   // Load report when the detail inputs change. A change aborts the previous
@@ -124,11 +126,18 @@ export default function ReportDetailPage() {
     setActiveTab('predictions')
   }
 
+  // Handler: 漏报项「去漏报分析」→ 跳 FN 分析 tab（与挖掘轨迹并列），可带预选 gt_id
+  const handleOpenFnAnalysis = (gtId?: string) => {
+    setInitialFnGt(gtId)
+    setActiveTab('fn')
+  }
+
   const tabs = [
     { key: 'overview', label: t('reportDetail.overview'), panelId: 'report-overview-panel' },
     { key: 'details', label: t('reportDetail.details'), panelId: 'report-details-panel' },
     { key: 'predictions', label: t('reportDetail.predictions'), panelId: 'report-predictions-panel' },
     { key: 'trace', label: t('reportDetail.trajectory'), panelId: 'report-trace-panel' },
+    { key: 'fn', label: t('reportDetail.fnAnalysis'), panelId: 'report-fn-panel' },
   ]
 
   const renderDatasetPanel = (content: ReactNode) => (
@@ -253,6 +262,7 @@ export default function ReportDetailPage() {
               rootPath={rootPath}
               initialSubset={initialSubset}
               regime={regime}
+              onOpenFnAnalysis={handleOpenFnAnalysis}
             />,
           ),
           'report-trace-panel': renderDatasetPanel(
@@ -261,6 +271,15 @@ export default function ReportDetailPage() {
               reportName={reportName}
               datasetName={activeDataset}
               rootPath={rootPath}
+            />,
+          ),
+          'report-fn-panel': renderDatasetPanel(
+            <FnAnalysisTab
+              key={activeDataset}
+              reportName={reportName}
+              datasetName={activeDataset}
+              rootPath={rootPath}
+              initialGtId={initialFnGt}
             />,
           ),
         }}

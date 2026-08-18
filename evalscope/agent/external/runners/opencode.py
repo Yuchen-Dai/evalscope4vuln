@@ -52,6 +52,11 @@ class OpenCodeRunner(AgentRunner):
       for the apt / nodesource / npm install commands.
     * ``home_override``     — optional ``HOME`` path.  Defaults to a
       fresh per-run tempdir so opencode cannot reuse a host token.
+    * ``mcp_servers``       — optional dict merged verbatim into the
+      ``mcp`` key of the generated ``opencode.json`` (opencode MCP
+      server config, e.g. ``{'fn-result-sink': {'type': 'local',
+      'command': [...], 'environment': {...}}}``).  Opt-in: omitted
+      by default so other callers keep the plain provider config.
     * ``node_setup_url``    — nodesource setup script URL.
     * ``npm_package``       — npm package name to install.
 
@@ -74,6 +79,7 @@ class OpenCodeRunner(AgentRunner):
         auto_install: bool = True,
         install_timeout_s: float = _INSTALL_TIMEOUT_S,
         home_override: Optional[str] = None,
+        mcp_servers: Optional[Dict[str, Any]] = None,
         node_setup_url: str = 'https://deb.nodesource.com/setup_22.x',
         npm_package: str = 'opencode-ai',
         **_: Any,
@@ -83,6 +89,7 @@ class OpenCodeRunner(AgentRunner):
         self._auto_install = auto_install
         self._install_timeout_s = install_timeout_s
         self._home_override = home_override
+        self._mcp_servers = mcp_servers
         self._node_setup_url = node_setup_url
         self._npm_package = npm_package
 
@@ -184,6 +191,9 @@ class OpenCodeRunner(AgentRunner):
                     }
                 }
             }
+            # Opt-in MCP servers (e.g. result-sink for FN analysis) merged verbatim.
+            if self._mcp_servers:
+                config['mcp'] = self._mcp_servers
             config_json = json.dumps(config, indent=2)
             escaped_config = shlex.quote(config_json)
             config_cmd = (

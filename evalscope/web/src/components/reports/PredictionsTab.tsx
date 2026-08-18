@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { usePolling } from '@/hooks/usePolling'
 import { ChevronLeft, ChevronRight, Hash, List, ArrowUp, ArrowDown, HelpCircle, Search, MessageSquare, AlertCircle } from 'lucide-react'
 import { useLocale } from '@/contexts/LocaleContext'
-import type { PredictionRow, ReportData, FnAdvice, FnAdviceProgress } from '@/api/types'
+import type { PredictionRow, ReportData } from '@/api/types'
 import { isDomainError } from '@/api/errors'
-import { getFnAdvice, getFnAdviceProgress, getPredictions, getDataFrame, postFnAdvice, startFnAdviceTask, stopFnAdviceTask } from '@/api/reports'
+import { getPredictions, getDataFrame } from '@/api/reports'
 import Select from '@/components/ui/Select'
 
 import ChatView from '@/components/single/ChatView'
@@ -20,9 +19,11 @@ interface Props {
   report?: ReportData
   initialSubset?: string
   regime?: 'type' | 'loc'
+  /** 漏报项「去漏报分析」跳转（ReportDetail 切到漏报分析 tab；FN 分析已迁至该 tab） */
+  onOpenFnAnalysis?: (gtId?: string) => void
 }
 
-export default function PredictionsTab({ reportName, datasetName, rootPath, initialSubset, regime = 'type' }: Props) {
+export default function PredictionsTab({ reportName, datasetName, rootPath, initialSubset, regime = 'type', onOpenFnAnalysis }: Props) {
   const { t } = useLocale()
   const [subsets, setSubsets] = useState<string[]>([])
   const [selectedSubset, setSelectedSubset] = useState('')
@@ -33,15 +34,6 @@ export default function PredictionsTab({ reportName, datasetName, rootPath, init
   const [mode, setMode] = useState('All')
   const [threshold, setThreshold] = useState(0.99)
   const [page, setPage] = useState(1)
-
-  // FN 漏报 LLM 路径分析（vuln benchmark：漏报漏洞的优化建议）
-  const [fnAdvice, setFnAdvice] = useState<Record<string, FnAdvice>>({})
-  const [analyzingGtIds, setAnalyzingGtIds] = useState<Set<string>>(new Set())
-  // 全量分析任务进度（done/total/current_gt_id）+ 任务态（服务端化，切走切回可恢复）
-  const [analyzingAll, setAnalyzingAll] = useState<{ done: number; total: number; current?: string | null } | null>(null)
-  const [fnTaskId, setFnTaskId] = useState<string | null>(null)
-  const [fnRunning, setFnRunning] = useState(false)
-  const [fnAllError, setFnAllError] = useState<string | null>(null)
 
   // Search state
   const [indexSearch, setIndexSearch] = useState('')
@@ -193,103 +185,15 @@ export default function PredictionsTab({ reportName, datasetName, rootPath, init
   const navBtnBase = 'bg-transparent border border-[var(--border)] rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--text)] transition-colors'
   const searchInputBase = 'pl-7 pr-2 py-[0.3rem] text-[0.8rem] w-[120px] bg-[var(--bg-deep)] rounded-[var(--radius-sm)] text-[var(--text)] outline-none transition-colors'
 
-  // 加载已缓存结果 + 恢复进行中任务（vuln benchmark 初次进入 / 切回）
-  useEffect(() => {
-    if (!datasetName.startsWith('vuln_') || !reportName) return
-    let cancelled = false
-    getFnAdvice(rootPath, reportName, datasetName)
-      .then((map) => { if (!cancelled && map) setFnAdvice(map) })
-      .catch(() => {})
-    // 切回时若后端仍有 running 任务 → 恢复轮询（服务端化，进度不丢）
-    getFnAdviceProgress(rootPath, reportName, datasetName)
-      .then((p) => {
-        if (cancelled || p.status !== 'running' || !p.task_id) return
-        setFnTaskId(p.task_id)
-        setFnRunning(true)
-        setAnalyzingAll({ done: p.processed_count ?? 0, total: p.total_count ?? 0, current: p.current_gt_id })
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [rootPath, reportName, datasetName])
-
-  // 单个漏报漏洞：同步分析（N=1，不走任务）
-  const onAnalyze = useCallback(async (gtId: string) => {
-    setAnalyzingGtIds((prev) => new Set(prev).add(gtId))
-    try {
-      const adv = await postFnAdvice(rootPath, reportName, datasetName, gtId)
-      setFnAdvice((prev) => ({ ...prev, [gtId]: adv }))
-    } catch (e) { console.error('fn-advice failed:', e) }
-    setAnalyzingGtIds((prev) => { const n = new Set(prev); n.delete(gtId); return n })
-  }, [rootPath, reportName, datasetName])
-
-  // 全量漏报：起后端异步任务（线程），前端轮询进度（切走切回可恢复）
-  const onAnalyzeAll = useCallback(async (gtIds: string[]) => {
-    if (!gtIds.length || fnRunning) return
-    setFnAllError(null)
-    const taskId = `fnadvice_${Date.now()}`
-    setFnTaskId(taskId)
-    setAnalyzingAll({ done: 0, total: gtIds.length, current: null })
-    try {
-      const res = await startFnAdviceTask(rootPath, reportName, datasetName, taskId)
-      if (res.status === 'error') {
-        setFnAllError(res.error || '启动失败')
-        setAnalyzingAll(null); setFnTaskId(null)
-        return
-      }
-      setFnRunning(true)   // → usePolling 起来
-    } catch (e) {
-      console.error('fn-advice invoke failed:', e)
-      setFnAllError(String(e))
-      setAnalyzingAll(null); setFnTaskId(null)
-    }
-  }, [rootPath, reportName, datasetName, fnRunning])
-
-  // 轮询任务进度（服务端化，enabled 驱动起停）
-  const progressFn = useCallback(async () => {
-    return getFnAdviceProgress(rootPath, reportName, datasetName)
-  }, [rootPath, reportName, datasetName])
-  usePolling<FnAdviceProgress>({
-    fn: progressFn,
-    enabled: fnRunning,
-    interval: 3000,
-    onData: (p) => {
-      setAnalyzingAll({ done: p.processed_count ?? 0, total: p.total_count ?? 0, current: p.current_gt_id })
-      if (p.status === 'completed' || p.status === 'stopped' || p.status === 'error') {
-        // 终态：回填全部结果缓存 + 停轮询
-        getFnAdvice(rootPath, reportName, datasetName).then(setFnAdvice).catch(() => {})
-        setFnRunning(false)
-        setFnTaskId(null)
-        setAnalyzingAll((prev) => (prev ? { ...prev, current: null } : null))
-        if (p.status === 'error' && p.error) setFnAllError(p.error)
-      }
-    },
-  })
-
-  // 停止全量任务（worker 下个 gt_id 边界退出，终态 progress 触发轮询收尾）
-  const onStopFnAdvice = useCallback(async () => {
-    if (!fnTaskId) return
-    try { await stopFnAdviceTask(fnTaskId) } catch (e) { console.error(e) }
-  }, [fnTaskId])
-
   // vuln benchmark：按漏洞（GT↔finding）维度浏览，替代 sample 翻页
+  // （FN 漏报分析已迁至「漏报分析」tab，此处仅提供跳转入口）
   const isVuln = datasetName.startsWith('vuln_') && predictions.some((p) => p.Findings)
   if (isVuln && !loading) {
     return (
       <div className="flex flex-col gap-3">
         {loadError && <ErrorAlert>{loadError}</ErrorAlert>}
         {predictions.length > 0
-          ? <VulnFindingsView
-              predictions={predictions}
-              regime={regime}
-              fnAdvice={fnAdvice}
-              analyzingGtIds={analyzingGtIds}
-              analyzingAll={analyzingAll}
-              fnRunning={fnRunning}
-              fnAllError={fnAllError}
-              onAnalyze={onAnalyze}
-              onAnalyzeAll={onAnalyzeAll}
-              onStopFnAdvice={onStopFnAdvice}
-            />
+          ? <VulnFindingsView predictions={predictions} regime={regime} onGoFnAnalysis={onOpenFnAnalysis} />
           : <EmptyStateSystem reason="no-data" context={{ view: 'evaluations' }} />}
       </div>
     )

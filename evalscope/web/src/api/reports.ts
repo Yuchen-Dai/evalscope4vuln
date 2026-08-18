@@ -5,7 +5,6 @@ import {
   fnAdviceInvokeResponseSchema,
   fnAdviceProgressSchema,
   fnAdviceResponseSchema,
-  fnAdviceSchema,
   fnAdviceStopResponseSchema,
   listReportsResponseSchema,
   loadReportResponseSchema,
@@ -140,23 +139,7 @@ export async function getAnalysis(
   return res.analysis
 }
 
-/** 对单个漏报(FN)漏洞跑 LLM 路径分析（全量由前端循环调用）。 */
-export async function postFnAdvice(
-  rootPath: string,
-  reportName: string,
-  datasetName: string,
-  gtId?: string,
-  signal?: AbortSignal,
-): Promise<FnAdvice> {
-  return apiPostValidated(`${BASE}/fn-advice`, {
-    root_path: rootPath,
-    report_name: reportName,
-    dataset_name: datasetName,
-    ...(gtId ? { gt_id: gtId } : {}),
-  }, fnAdviceSchema, { signal })
-}
-
-/** 读取已缓存的 FN 漏报分析结果（前端初次加载用）。 */
+/** 读取已缓存的 FN 漏报分析结果（前端初次加载用；服务端叠加 MCP staging 增量条目）。 */
 export async function getFnAdvice(
   rootPath: string,
   reportName: string,
@@ -170,16 +153,19 @@ export async function getFnAdvice(
   return res.advice
 }
 
-/** 异步起 FN 全量分析任务（线程），立即返回 task_id。task_id 经 header 传（与 eval 一致）。 */
+/** 异步起 FN 分析任务（线程），立即返回 task_id。gtIds 省略=全量漏报，给定=子集
+ * （单条也走异步，无同步阻塞端点）。task_id 经 header 传（与 eval 一致）。 */
 export async function startFnAdviceTask(
   rootPath: string,
   reportName: string,
   datasetName: string,
   taskId: string,
+  gtIds?: string[],
   signal?: AbortSignal,
 ): Promise<FnAdviceInvokeResponse> {
   return apiPostValidated(`${BASE}/fn-advice/invoke`, {
     root_path: rootPath, report_name: reportName, dataset_name: datasetName,
+    ...(gtIds && gtIds.length > 0 ? { gt_ids: gtIds } : {}),
   }, fnAdviceInvokeResponseSchema, {
     headers: { 'EvalScope-Task-Id': taskId }, signal,
   })

@@ -1,28 +1,18 @@
 /**
  * vuln_scan 漏洞浏览视图：按 GT 或 Finding 维度浏览，查看 GT↔finding 匹配关系 +
  * 图灵返回的漏洞详情。regime（类型+位置/仅位置）由父组件（ReportDetailPage→PredictionsTab）
- * 通过 props 传入，本组件不自带 selector。
+ * 通过 props 传入，本组件不自带 selector。FN 分析入口已迁至「漏报分析」tab
+ * （漏报项上的「去漏报分析」经 onGoFnAnalysis 跳转）。
  */
 import { useMemo, useState, type ReactNode } from 'react'
 import { useLocale } from '@/contexts/LocaleContext'
-import type { PredictionRow, FnAdvice } from '@/api/types'
+import type { PredictionRow } from '@/api/types'
 
 interface Props {
   predictions: PredictionRow[]
   regime: 'type' | 'loc'
-  /** FN 漏报 LLM 分析结果（gt_id → advice），由 PredictionsTab 加载/触发 */
-  fnAdvice?: Record<string, FnAdvice>
-  /** 正在分析的 gt_id 集合（单个按钮 loading） */
-  analyzingGtIds?: Set<string>
-  /** 全量分析进度（done/total/current_gt_id），null 表示未在批量分析 */
-  analyzingAll?: { done: number; total: number; current?: string | null } | null
-  /** 全量任务运行中（服务端任务态，切走切回可恢复） */
-  fnRunning?: boolean
-  /** 全量任务启动错误（如 judge 未配） */
-  fnAllError?: string | null
-  onAnalyze?: (gtId: string) => void
-  onAnalyzeAll?: (gtIds: string[]) => void
-  onStopFnAdvice?: () => void
+  /** 漏报项「去漏报分析」跳转（切到 ReportDetail 的漏报分析 tab，可带预选 gt_id） */
+  onGoFnAnalysis?: (gtId?: string) => void
 }
 
 type ViewMode = 'gt' | 'finding'
@@ -46,9 +36,7 @@ const normSev = (s?: string | null): string => {
   return (SEV_DIST_ORDER as readonly string[]).includes(u) ? u : 'UNKNOWN'
 }
 
-export default function VulnFindingsView({
-  predictions, regime, fnAdvice, analyzingGtIds, analyzingAll, fnRunning, fnAllError, onAnalyze, onAnalyzeAll, onStopFnAdvice,
-}: Props) {
+export default function VulnFindingsView({ predictions, regime, onGoFnAnalysis }: Props) {
   const { t } = useLocale()
   const vulnPreds = predictions.filter((p) => p.Findings)
   const [scanIdx, setScanIdx] = useState(0)
@@ -81,13 +69,6 @@ export default function VulnFindingsView({
     f?.findings.forEach((it) => it.vuln_type && s.add(it.vuln_type))
     return [...s].sort()
   }, [f])
-
-  // 漏报(FN)的 gt_id 列表（missedOf 按 regime 取），供「全量分析漏报」
-  const fnGtIds = useMemo(
-    () => (f?.gt.filter((g) => missedOf(g)).map((g) => g.gt_id)) ?? [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [f, regime],
-  )
 
   // 按严重度聚合（regime 感知）：TP=该级别命中 gt 数（matched 非空）、FN=该级别
   // missed gt 数、FP=该级别 classification=FP 的 finding 数。条形分母为该级别 gt
@@ -252,41 +233,16 @@ export default function VulnFindingsView({
           <option value="">{t('vuln.allTypes')}</option>
           {typeOptions.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
         </select>
-        {onAnalyzeAll && fnGtIds.length > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
-            {fnRunning && analyzingAll && (
-              <span className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                <div className="h-1.5 w-24 rounded-full bg-[var(--border)] overflow-hidden">
-                  <div className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
-                       style={{ width: `${analyzingAll.total ? (analyzingAll.done / analyzingAll.total) * 100 : 0}%` }} />
-                </div>
-                <span className="tabular-nums whitespace-nowrap">
-                  {analyzingAll.done}/{analyzingAll.total}{analyzingAll.current ? ` · ${analyzingAll.current}` : ''}
-                </span>
-              </span>
-            )}
-            {fnRunning && onStopFnAdvice && (
-              <button onClick={onStopFnAdvice}
-                className="px-2 py-1 text-xs rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] cursor-pointer transition-colors"
-                title={t('vuln.stopTitle')}
-              >{t('vuln.stop')}</button>
-            )}
-            <button
-              onClick={() => onAnalyzeAll(fnGtIds)}
-              disabled={!!fnRunning}
-              className="px-3 py-1 text-sm rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
-              title={t('vuln.analyzeAllTitle')}
-            >
-              {fnRunning ? t('vuln.analyzingAll') : t('vuln.analyzeAll', { n: fnGtIds.length })}
-            </button>
-          </div>
+        {onGoFnAnalysis && (
+          <button
+            onClick={() => onGoFnAnalysis()}
+            className="ml-auto px-3 py-1 text-sm rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] cursor-pointer transition-colors"
+            title={t('vuln.analyzeAllTitle')}
+          >
+            {t('vuln.goFnAnalysis')}
+          </button>
         )}
       </div>
-      {fnAllError && (
-        <div className="text-xs text-[var(--danger)] break-all">
-          {t('vuln.fnAllErrorHint', { msg: fnAllError })}
-        </div>
-      )}
 
       {/* master / detail */}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-3">
@@ -346,15 +302,15 @@ export default function VulnFindingsView({
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-semibold">{selGtObj.gt_id}</h3>
                   {missedOf(selGtObj) && <span className="text-xs px-2 py-0.5 rounded bg-[var(--danger)] text-white">{t('vuln.turingMissedFn')}</span>}
+                  {missedOf(selGtObj) && onGoFnAnalysis && (
+                    <button
+                      onClick={() => onGoFnAnalysis(selGtObj.gt_id)}
+                      className="ml-auto px-2.5 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer transition-colors shrink-0"
+                    >
+                      {t('vuln.goFnAnalysis')}
+                    </button>
+                  )}
                 </div>
-                {missedOf(selGtObj) && onAnalyze && (
-                  <FnAdviceBlock
-                    gtId={selGtObj.gt_id}
-                    advice={fnAdvice?.[selGtObj.gt_id]}
-                    analyzing={analyzingGtIds?.has(selGtObj.gt_id)}
-                    onAnalyze={onAnalyze}
-                  />
-                )}
                 <Detail label={t('vuln.type')} value={selGtObj.vuln_type} />
                 <Detail label={t('vuln.severity')} value={selGtObj.severity} color={sevColor(selGtObj.severity)} />
                 <Detail label={t('vuln.cweId')} value={selGtObj.cwe} />
@@ -428,122 +384,4 @@ function Detail({ label, value, color }: { label: string; value?: ReactNode; col
 function EmptyDetail() {
   const { t } = useLocale()
   return <div className="text-sm text-[var(--text-muted)]">{t('vuln.selectHint')}</div>
-}
-
-/** advice_structured 的已知字段（后端 fn_advisor.extract_structured_advice 输出）。 */
-interface FnAdviceStructured {
-  category?: unknown
-  stages?: unknown
-  reasoning?: unknown
-  suggestions?: unknown
-  summary?: unknown
-}
-
-/** 结构化字段安全取值：字符串 strip；数组元素转非空字符串列表。 */
-const asStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
-const asStrList = (v: unknown): string[] =>
-  Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean) : []
-
-/** FN 漏报 LLM 分析建议区块：触发按钮 + 建议/错误展示（有 advice_structured 渲染
- * 结构化卡片，旧缓存/解析失败回退纯文本 <pre>）。 */
-function FnAdviceBlock({ gtId, advice, analyzing, onAnalyze }: {
-  gtId: string
-  advice?: FnAdvice
-  analyzing?: boolean
-  onAnalyze?: (gtId: string) => void
-}) {
-  const { t } = useLocale()
-  const [showFiles, setShowFiles] = useState(false)
-  const files = advice?.related_files ?? []
-  const st = (advice?.advice_structured ?? null) as FnAdviceStructured | null
-  const stCategory = st ? asStr(st.category) : ''
-  const stStages = st ? asStrList(st.stages) : []
-  const stReasoning = st ? asStr(st.reasoning) : ''
-  const stSuggestions = st ? asStrList(st.suggestions) : []
-  const stSummary = st ? asStr(st.summary) : ''
-  const structuredOk = !!st && !!(stCategory || stStages.length || stReasoning || stSuggestions.length || stSummary)
-  return (
-    <div className="mt-1 pt-2 border-t border-[var(--border)]">
-      <div className="flex items-center gap-2 mb-1">
-        <button
-          onClick={() => onAnalyze?.(gtId)}
-          disabled={analyzing}
-          className="px-2.5 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--bg)] hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-wait transition-colors"
-        >
-          {analyzing ? t('vuln.analyzing') : (advice ? t('vuln.reanalyze') : t('vuln.analyzeMissed'))}
-        </button>
-        {advice?.status === 'ok' && advice.related_sessions != null && (
-          <span className="text-[10px] text-[var(--text-muted)]">
-            {t('vuln.fnRelatedSessions', { sessions: advice.related_sessions })}
-          </span>
-        )}
-        {advice?.status === 'ok' && files.length > 0 && (
-          <button
-            onClick={() => setShowFiles(!showFiles)}
-            className="text-[10px] text-[var(--accent)] hover:underline cursor-pointer ml-auto"
-          >
-            {t('vuln.fnRelatedFiles', { n: files.length })}{showFiles ? ' ▾' : ' ▸'}
-          </button>
-        )}
-      </div>
-      {!advice && (
-        <div className="text-xs text-[var(--text-muted)]">
-          {t('vuln.fnAdviceHint')}
-        </div>
-      )}
-      {advice?.status === 'error' && (
-        <div className="text-xs text-[var(--danger)] break-all">⚠ {advice.error}</div>
-      )}
-      {advice?.status === 'ok' && files.length > 0 && showFiles && (
-        <div className="mt-1 mb-1 flex flex-col gap-0.5">
-          {files.map((fp, i) => (
-            <span key={i} className="text-[11px] font-mono text-[var(--text-muted)] truncate" title={fp}>
-              {fp}
-            </span>
-          ))}
-        </div>
-      )}
-      {advice?.status === 'ok' && structuredOk && (
-        <div className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] flex flex-col gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] text-[var(--text-muted)]">{t('vuln.fnCategory')}</span>
-            {stCategory && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--danger)] text-white">{stCategory}</span>
-            )}
-            {stStages.length > 0 && (
-              <span className="flex flex-wrap items-center gap-1">
-                <span className="text-[10px] text-[var(--text-muted)]">{t('vuln.fnStages')}</span>
-                {stStages.map((s, i) => (
-                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--bg-card2)] font-mono">{s}</span>
-                ))}
-              </span>
-            )}
-          </div>
-          {stReasoning && (
-            <div>
-              <div className="text-[10px] font-medium text-[var(--text-muted)] mb-0.5">{t('vuln.fnReasoning')}</div>
-              <p className="whitespace-pre-wrap break-words leading-relaxed">{stReasoning}</p>
-            </div>
-          )}
-          {stSuggestions.length > 0 && (
-            <div>
-              <div className="text-[10px] font-medium text-[var(--text-muted)] mb-0.5">{t('vuln.fnSuggestions')}</div>
-              <ul className="flex flex-col gap-1 list-disc pl-4">
-                {stSuggestions.map((s, i) => <li key={i} className="break-words leading-relaxed">{s}</li>)}
-              </ul>
-            </div>
-          )}
-          {stSummary && (
-            <div className="pt-1 border-t border-[var(--border)]">
-              <span className="text-[var(--text-muted)] mr-1">{t('vuln.fnSummary')}:</span>
-              <span className="font-medium">{stSummary}</span>
-            </div>
-          )}
-        </div>
-      )}
-      {advice?.status === 'ok' && advice.advice && !structuredOk && (
-        <pre className="mt-1 p-3 rounded-[var(--radius-sm)] bg-[var(--bg-deep)] text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">{advice.advice}</pre>
-      )}
-    </div>
-  )
 }
