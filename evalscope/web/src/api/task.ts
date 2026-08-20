@@ -17,13 +17,10 @@ export function createTaskApi(scope: TaskScope) {
   return {
     submit(
       payload: Record<string, unknown>,
-      taskId: string,
       signal?: AbortSignal,
     ): Promise<EvalInvokeResponse> {
-      return apiPostValidated(`${basePath}/invoke`, payload, evalInvokeResponseSchema, {
-        headers: { 'EvalScope-Task-Id': taskId },
-        signal,
-      })
+      // task_id is generated server-side and returned in the response body.
+      return apiPostValidated(`${basePath}/invoke`, payload, evalInvokeResponseSchema, { signal })
     },
 
     progress(taskId: string, signal?: AbortSignal): Promise<ProgressResponse> {

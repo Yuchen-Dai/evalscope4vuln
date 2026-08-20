@@ -27,7 +27,8 @@ class ProgressTracker:
           "total_count":     14042,
           "processed_count": 5200,
           "percent":         37.03,
-          "updated_at":      "2026-04-02T10:05:42"
+          "updated_at":      "2026-04-02T10:05:42",
+          "error":           null | "exception summary when status == error"
         }
 
     ``write_interval`` controls how often incremental progress updates are
@@ -54,6 +55,7 @@ class ProgressTracker:
         self._lock = threading.Lock()
         self._processed_count: int = 0
         self._status = 'running'
+        self._error: Optional[str] = None
         self._pipeline = pipeline
         self._write_interval = write_interval
         self._last_write_time: float = 0.0
@@ -72,7 +74,7 @@ class ProgressTracker:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         if exc_type is not None:
-            self.set_status('error')
+            self.set_status('error', message=f'{exc_type.__name__}: {exc_val}')
         else:
             self.set_status('completed')
         ProgressTracker._current = None
@@ -97,9 +99,12 @@ class ProgressTracker:
             self._processed_count += n
             self._write(force=False)
 
-    def set_status(self, status: str) -> None:
+    def set_status(self, status: str, message: Optional[str] = None) -> None:
+        """Set the status; *message* is stored in the ``error`` field (failure reason)."""
         with self._lock:
             self._status = status
+            if message is not None:
+                self._error = message
             self._write(force=True)
 
     # ------------------------------------------------------------------
@@ -128,6 +133,7 @@ class ProgressTracker:
             'processed_count': processed,
             'percent': percent,
             'updated_at': current_time().isoformat(),
+            'error': self._error,
         }
         logger.debug(f'Processed / Total: {processed} / {self._total_count} | {percent}%')
         tmp = self._path + '.tmp'

@@ -11,13 +11,12 @@ interface FormRenderProps {
 }
 
 interface TaskRunnerPageProps {
-  idPrefix: string
   title: string
   configTitle: string
   statusTitle: string
   readyLabel: string
   renderForm: (props: FormRenderProps) => ReactNode
-  submitTask: (config: Record<string, unknown>, taskId: string) => Promise<EvalInvokeResponse>
+  submitTask: (config: Record<string, unknown>) => Promise<EvalInvokeResponse>
   stopTask: (taskId: string) => Promise<unknown>
   getProgress: (taskId: string) => Promise<ProgressResponse>
   getLog: (taskId: string, tailLine: number) => Promise<LogResponse>
@@ -25,12 +24,7 @@ interface TaskRunnerPageProps {
   getTasks: (signal?: AbortSignal) => Promise<{ tasks: TaskEntry[] }>
 }
 
-function createTaskId(prefix: string): string {
-  return `${prefix}_${Date.now()}`
-}
-
 export default function TaskRunnerPage({
-  idPrefix,
   title,
   configTitle,
   statusTitle,
@@ -83,18 +77,19 @@ export default function TaskRunnerPage({
   }, [refreshTasks])
 
   const handleSubmit = async (config: Record<string, unknown>) => {
-    const id = createTaskId(idPrefix)
-    setTaskId(id)
+    setTaskId(null)
     setRunning(true)
     setLogText('')
     setLogLine(0)
     setProgress(0)
     setResult(null)
     try {
-      await submitTask(config, id)   // 异步 invoke，立即返回 running（不阻塞）
+      // 异步 invoke，立即返回 running（不阻塞）；task_id 由服务端生成
+      const resp = await submitTask(config)
+      setTaskId(resp.task_id)
       refreshTasks()                 // 列表刷新（含新任务）
     } catch (error) {
-      setResult({ status: 'error', task_id: id, error: String(error) })
+      setResult({ status: 'error', task_id: '', error: String(error) })
       setRunning(false)
     }
   }

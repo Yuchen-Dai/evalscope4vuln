@@ -11,7 +11,6 @@ export default function EvalTaskPage() {
 
   return (
     <TaskRunnerPage
-      idPrefix="eval"
       title={t('eval.title')}
       configTitle={t('eval.config')}
       statusTitle={t('eval.status')}

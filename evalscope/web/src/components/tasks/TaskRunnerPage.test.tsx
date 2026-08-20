@@ -14,7 +14,6 @@ describe('TaskRunnerPage', () => {
     render(
       <LocaleProvider>
         <TaskRunnerPage
-          idPrefix="eval"
           title="Evaluation"
           configTitle="Configuration"
           statusTitle="Status"
@@ -37,9 +36,10 @@ describe('TaskRunnerPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
       await Promise.resolve()
+      await Promise.resolve()
     })
 
-    expect(submitTask).toHaveBeenCalledWith({ model: 'qwen-plus' }, 'eval_1782864000000')
+    expect(submitTask).toHaveBeenCalledWith({ model: 'qwen-plus' })
     expect(screen.getByText('Completed')).toBeInTheDocument()
   })
 })

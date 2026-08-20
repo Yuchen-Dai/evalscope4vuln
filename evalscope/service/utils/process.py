@@ -1,9 +1,12 @@
 import contextlib
 import io
 import multiprocessing
+import os
 import queue
+import signal
 import sys
 import threading
+import time
 import traceback
 
 from evalscope.config import TaskConfig
@@ -19,6 +22,11 @@ logger = get_logger()
 _active_processes: dict[str, multiprocessing.Process] = {}
 """Maps task_id → the subprocess currently running that task."""
 
+_adopted: dict[str, tuple[int, int]] = {}
+"""Maps task_id → (pid, start_ticks) for orphaned children adopted after a
+service restart. These processes are still alive but no longer owned by this
+process tree, so they can only be identified/killed via their pid."""
+
 _active_lock = threading.Lock()
 
 
@@ -32,17 +40,53 @@ def unregister_process(task_id: str) -> None:
     """Remove a finished / stopped subprocess from the registry."""
     with _active_lock:
         _active_processes.pop(task_id, None)
+        _adopted.pop(task_id, None)
+
+
+def adopt_task(task_id: str, pid: int, start_ticks: int = None) -> None:
+    """Adopt an orphaned child process (alive but not in this process tree)."""
+    with _active_lock:
+        _adopted[task_id] = (pid, start_ticks)
+
+
+def _stop_adopted(pid: int, start_ticks: int) -> bool:
+    """Terminate an adopted process by pid (SIGTERM, escalate to SIGKILL)."""
+    from .task_runtime import is_process_alive
+
+    if not is_process_alive(pid, start_ticks):
+        return True  # Already gone; nothing to do.
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        return is_process_alive(pid, start_ticks) is False
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        if not is_process_alive(pid, start_ticks):
+            return True
+        time.sleep(0.1)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    return not is_process_alive(pid, start_ticks)
 
 
 def stop_process(task_id: str) -> bool:
     """Terminate the subprocess associated with *task_id*.
 
-    Returns True if a process was found and terminated, False otherwise.
+    Also covers adopted (orphaned) processes from before a service restart,
+    killed by pid. Returns True if a process was found and terminated.
     """
     with _active_lock:
         proc = _active_processes.pop(task_id, None)
+        adopted = _adopted.pop(task_id, None) if proc is None else None
     if proc is None:
-        return False
+        if adopted is None:
+            return False
+        stopped = _stop_adopted(*adopted)
+        if stopped:
+            logger.info(f'Task {task_id} (adopted pid {adopted[0]}) stopped by user.')
+        return stopped
     if proc.is_alive():
         proc.terminate()
         proc.join(timeout=3)
@@ -60,10 +104,20 @@ def list_active_processes():
 
 
 def is_task_running(task_id: str) -> bool:
-    """True if task_id is registered AND its process is still alive."""
+    """True if task_id is registered AND its process is still alive.
+
+    Falls back to a pid liveness probe for adopted (orphaned) tasks.
+    """
+    from .task_runtime import is_process_alive
+
     with _active_lock:
         proc = _active_processes.get(task_id)
-        return proc is not None and proc.is_alive()
+        if proc is not None:
+            return proc.is_alive()
+        adopted = _adopted.get(task_id)
+    if adopted is None:
+        return False
+    return is_process_alive(*adopted)
 
 
 # ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ describe.each(['eval', 'perf'] as const)('createTaskApi(%s)', (scope) => {
   it('keeps all task lifecycle requests under the selected API scope', async () => {
     const api = createTaskApi(scope)
 
-    await api.submit({ model: 'qwen-plus' }, 'task-1')
+    await api.submit({ model: 'qwen-plus' })
     await api.progress('task-1')
     await api.log('task-1', 12, 100)
     await api.stop('task-1')
@@ -29,7 +29,7 @@ describe.each(['eval', 'perf'] as const)('createTaskApi(%s)', (scope) => {
       `/api/v1/${scope}/invoke`,
       { model: 'qwen-plus' },
       expect.anything(),
-      expect.objectContaining({ headers: { 'EvalScope-Task-Id': 'task-1' } }),
+      expect.not.objectContaining({ headers: expect.anything() }),
     )
     expect(get).toHaveBeenNthCalledWith(
       1,

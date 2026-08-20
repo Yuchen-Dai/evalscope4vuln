@@ -1,10 +1,13 @@
 import json
 import os
 import pandas as pd
+import uuid
+from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request, send_file
 from tabulate import tabulate
 from typing import Any, Dict, List
 
+from evalscope.api.registry import BENCHMARK_REGISTRY
 from evalscope.config import TaskConfig
 from evalscope.constants import EvalType
 from evalscope.report.combinator import get_data_frame, get_report_list
@@ -19,8 +22,8 @@ from ..utils import (
     stop_process,
     validate_task_id,
 )
-from evalscope.api.registry import BENCHMARK_REGISTRY
-from ..utils.process import is_task_running, list_active_processes, start_subprocess
+from ..utils.process import adopt_task, is_task_running, list_active_processes, start_subprocess
+from ..utils.task_runtime import is_process_alive, patch_progress, proc_start_ticks, read_runtime, write_runtime
 
 logger = get_logger()
 
@@ -52,6 +55,7 @@ def _vuln_entry(name: str) -> Dict[str, Any]:
             'en': {'full': meta.description or '', 'sections': {}},
         },
     }
+
 
 _COLUMN_ZH = {
     'Model': '模型',
@@ -113,12 +117,16 @@ def _handle_validation_error(exc: RequestValidationError):
     return jsonify({'error': exc.message}), exc.status_code
 
 
-def _parse_request() -> tuple[dict, str]:
+def _parse_request(require_task_id: bool = True) -> tuple[dict, str]:
     """Validate the request body and return (data, task_id).
+
+    The ``EvalScope-Task-Id`` header is optional when *require_task_id* is
+    False — the service then generates the task_id itself (invoke flow).
+    Resume flows keep it mandatory because they must reuse the original id.
 
     Raises:
         RequestValidationError: when the request is missing required fields or
-            the ``EvalScope-Task-Id`` header is absent or malformed.
+            the ``EvalScope-Task-Id`` header is absent/malformed and required.
     """
     data = request.get_json()
     if not data:
@@ -128,16 +136,22 @@ def _parse_request() -> tuple[dict, str]:
         if field not in data:
             raise RequestValidationError(f'{field} is required')
 
-    task_id = request.headers.get('EvalScope-Task-Id')
-    if not task_id:
+    task_id = request.headers.get('EvalScope-Task-Id') or None
+    if not task_id and require_task_id:
         raise RequestValidationError('EvalScope-Task-Id header is required')
 
-    try:
-        validate_task_id(task_id)
-    except ValueError as e:
-        raise RequestValidationError(str(e)) from e
+    if task_id:
+        try:
+            validate_task_id(task_id)
+        except ValueError as e:
+            raise RequestValidationError(str(e)) from e
 
     return data, task_id
+
+
+def _generate_task_id() -> str:
+    """Server-side task_id: timestamp + random suffix, collision-safe."""
+    return f'task-{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}'
 
 
 def _build_task_config(data: dict) -> TaskConfig:
@@ -193,23 +207,36 @@ def _start_task(task_id: str, task_config: TaskConfig):
     """异步：启动 run_task 子进程，立即返回（不阻塞）。
 
     子进程后台跑，进度经 progress.json、结果经 reports/ 落地。前端轮询
-    /progress 和 /eval/tasks 查状态，/report 拿 HTML 报告。
+    /progress 和 /eval/tasks 查状态，/report 拿 HTML 报告。子进程 pid 落
+    task_runtime.json，供崩溃/重启后的任务对账（reconcile）使用。
     """
+    work_dir = task_config.work_dir
     create_log_file(task_id, os.path.join('logs', 'eval_log.log'), _outputs_root())
-    start_subprocess(run_eval_wrapper, task_config, task_id=task_id)
+    proc = start_subprocess(run_eval_wrapper, task_config, task_id=task_id)
+    write_runtime(work_dir, proc.pid, proc_start_ticks(proc.pid))
     logger.info(f'[{task_id}] Task started (async): model={task_config.model}, datasets={task_config.datasets}')
     return jsonify({'status': 'running', 'task_id': task_id}), 202
 
 
 @bp_eval.route('/invoke', methods=['POST'])
 def run_evaluation():
-    """异步提交评测任务：立即返回 task_id，后台跑。"""
-    data, task_id = _parse_request()
+    """异步提交评测任务：立即返回 task_id，后台跑。
+
+    task_id 由服务端生成（header 缺省时）；带 header 的旧客户端仍接受，
+    但任何已存在的 work_dir 都会 409，杜绝复用已完结 task_id 覆盖旧产物。
+    """
+    data, task_id = _parse_request(require_task_id=False)
+    if not task_id:
+        task_id = _generate_task_id()
+
+    work_dir = os.path.join(_outputs_root(), task_id)
+    if os.path.exists(work_dir):
+        return jsonify({'error': f'task_id already exists: {task_id}'}), 409
     if is_task_running(task_id):
         return jsonify({'error': f'Task {task_id} is already running'}), 409
 
     task_config = _build_task_config(data)
-    task_config.work_dir = os.path.join(_outputs_root(), task_id)
+    task_config.work_dir = work_dir
     _write_scan_config(task_config.work_dir, data.get('scan_config') or {})
     return _start_task(task_id, task_config)
 
@@ -227,6 +254,9 @@ def stop_evaluation():
 
     stopped = stop_process(task_id)
     if stopped:
+        # The child is killed by signal, so it cannot write its own terminal
+        # state — record it here so the task does not show up as running.
+        patch_progress(os.path.join(_outputs_root(), task_id), 'stopped', 'Stopped by user')
         return jsonify({'status': 'stopped', 'task_id': task_id}), 200
     else:
         return jsonify({'error': f'No running task found for task_id: {task_id}'}), 404
@@ -266,6 +296,12 @@ def get_evaluation_progress():
     try:
         with open(progress_file, 'r') as f:
             progress = json.load(f)
+        # On-demand reconciliation: a stale "running" (child killed by OOM /
+        # service restart) is detected here so the frontend stops spinning.
+        if progress.get('status') == 'running' and not is_task_running(task_id):
+            reconcile_running_task(task_id, os.path.dirname(progress_file))
+            with open(progress_file, 'r') as f:
+                progress = json.load(f)
         return jsonify(progress), 200
     except FileNotFoundError:
         return jsonify({'percent': 0.0}), 200
@@ -282,6 +318,52 @@ def _read_progress(task_id: str) -> dict:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {'percent': 0.0}
+
+
+def reconcile_running_task(task_id: str, work_dir: str) -> str:
+    """对账一个 progress 标记 running 但不在内存注册表里的任务。
+
+    progress.json 只由子进程在正常退出时写终态；OOM/SIGKILL/服务重启都会
+    让它停在 running。这里按 task_runtime.json 记录的 pid 判定真实状态：
+
+    - pid 仍活（孤儿进程，如服务重启后遗留）→ 收养（保持 running，stop
+      仍可按 pid 杀），返回 'running'；
+    - pid 已死/记录缺失 → 写 error 终态（progress.json），返回 'error'。
+
+    updated_at 不参与判定：单样本扫描可数小时不动 percent，时间阈值会误杀。
+    """
+    if is_task_running(task_id):
+        return 'running'
+    runtime = read_runtime(work_dir)
+    if runtime and is_process_alive(runtime.get('pid'), runtime.get('start_ticks')):
+        adopt_task(task_id, runtime.get('pid'), runtime.get('start_ticks'))
+        return 'running'
+    patch_progress(work_dir, 'error', 'Child process died unexpectedly (service restart / OOM / crash).')
+    return 'error'
+
+
+def reconcile_stale_tasks(outputs_root: str) -> int:
+    """启动对账：扫 outputs_root 下所有 running 状态的 progress.json。
+
+    幂等——终态任务不动。返回本次处理的任务数（供日志/测试）。
+    """
+    import glob as _glob
+
+    reconciled = 0
+    for pf in _glob.glob(os.path.join(outputs_root, '*', 'progress.json')):
+        task_id = os.path.basename(os.path.dirname(pf))
+        try:
+            with open(pf, encoding='utf-8') as f:
+                status = (json.load(f) or {}).get('status')
+        except (json.JSONDecodeError, OSError):
+            continue
+        if status != 'running':
+            continue
+        new_status = reconcile_running_task(task_id, os.path.dirname(pf))
+        reconciled += 1
+        if new_status == 'error':
+            logger.warning(f'[reconcile] Task {task_id} marked error (child process gone).')
+    return reconciled
 
 
 def _read_task_meta(task_id: str, root: str) -> dict:
@@ -350,6 +432,9 @@ def list_tasks():
             continue  # 运行中优先
         p = _read_progress(task_id)
         status = p.get('status', 'completed')
+        if status == 'running':
+            # 按需对账：不在内存注册表的 running 任务实时查 pid，僵尸标 error
+            status = reconcile_running_task(task_id, os.path.dirname(pf))
         meta = _read_task_meta(task_id, root)
         items[task_id] = {
             'task_id': task_id,

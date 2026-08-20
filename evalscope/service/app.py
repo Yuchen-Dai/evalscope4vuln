@@ -71,6 +71,17 @@ def create_app(outputs: str = None):
         os.makedirs(default_outputs, exist_ok=True)
         app.config['OUTPUTS_ROOT'] = default_outputs
 
+    # Startup reconciliation: tasks whose progress.json says "running" but whose
+    # child process is gone (OOM / previous service crash) are marked error;
+    # still-alive orphans are adopted so stop keeps working. Idempotent.
+    try:
+        from .blueprints.eval import reconcile_stale_tasks
+        reconciled = reconcile_stale_tasks(app.config['OUTPUTS_ROOT'])
+        if reconciled:
+            logger.info(f'[reconcile] Startup reconciliation processed {reconciled} running task(s).')
+    except Exception as e:  # noqa: BLE001 - never block service startup
+        logger.warning(f'[reconcile] Startup reconciliation skipped: {e}')
+
     # Ensure non-ASCII characters (e.g. Chinese) are serialised as-is in JSON
     # responses instead of being escaped to \uXXXX sequences.
     app.json.ensure_ascii = False
