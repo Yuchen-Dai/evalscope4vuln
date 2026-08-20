@@ -43,8 +43,8 @@ logger = get_logger()
 MAX_INDEX_FILES = 10
 MAX_PROMPT_HEAD = 120
 
-# opencode agent 超时（全量 sessions 分析比按文件过滤版更重，从 900s 上调）
-AGENT_TIMEOUT_S = 1500.0
+# opencode agent 超时（全量 sessions 分析较重，设为 1 小时）
+AGENT_TIMEOUT_S = 3600.0
 
 
 def extract_fn(vuln_match: dict) -> list[dict]:
@@ -381,6 +381,95 @@ def extract_structured_advice(text: str) -> dict | None:
 # staging（MCP 写回）payload 里的平台元数据键（合并结构化结论时剔除）
 _STAGING_META_KEYS = ('gt_id', 'status', 'source', 'ts')
 
+# Mirrors the frontend fnTraceStepSchema `type` enum (reports.schema.ts).
+_TRACE_STEP_TYPES = frozenset({'thought', 'tool', 'finding', 'conclusion', 'text', 'dead_end', 'briefing'})
+
+
+def _repair_json_quotes(s: str) -> str:
+    """Escape unescaped quotes inside JSON string values (best effort).
+
+    LLM-generated trace JSON sometimes embeds raw quotes in descriptions,
+    which breaks `json.loads`. A closing quote is structural only when the
+    next non-space char is one of `,:}]` or EOF; anything else is treated as
+    an embedded quote and escaped.
+    """
+    out: list = []
+    in_str = False
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if not in_str:
+            if c == '"':
+                in_str = True
+            out.append(c)
+        elif c == '\\':
+            out.append(c)
+            if i + 1 < len(s):
+                out.append(s[i + 1])
+                i += 1
+        elif c == '"':
+            j = i + 1
+            while j < len(s) and s[j] in ' \t\r\n':
+                j += 1
+            if j >= len(s) or s[j] in ',:}]':
+                in_str = False
+                out.append(c)
+            else:
+                out.append('\\"')
+        else:
+            out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+def _normalize_trace(structured: dict) -> None:
+    """Normalize the agent-submitted trace in place (best effort).
+
+    LLM output is unstable: submit_result sometimes stringifies the whole
+    trace JSON instead of nesting the object, and `breakpoint` may arrive as
+    plain text instead of {stage, step_id, ...}. The frontend fnTraceSchema
+    expects {steps: [...], breakpoint: {...}} — repair both shapes so the
+    timeline still renders; drop the key when it cannot be repaired.
+    """
+    trace = structured.get('trace')
+    if isinstance(trace, str):
+        try:
+            trace = json.loads(trace)
+        except ValueError:
+            try:
+                trace = json.loads(_repair_json_quotes(trace))
+            except ValueError:
+                structured.pop('trace', None)
+                return
+    if not isinstance(trace, dict) or not isinstance(trace.get('steps'), list):
+        structured.pop('trace', None)
+        return
+    steps = [s for s in trace['steps'] if isinstance(s, dict)]
+    if not steps:
+        structured.pop('trace', None)
+        return
+    # fnTraceStepSchema requires id / type (enum) / title — agent output often
+    # carries only a free-form description; fill the required fields so the
+    # frontend safeParse passes and the timeline still renders.
+    for idx, s in enumerate(steps):
+        if not isinstance(s.get('id'), str):
+            s['id'] = f's{idx}'
+        if s.get('type') not in _TRACE_STEP_TYPES:
+            s['type'] = 'text'
+        if not isinstance(s.get('title'), str) or not s.get('title'):
+            desc = s.get('description')
+            s['title'] = desc if isinstance(desc, str) and desc else f'step {idx + 1}'
+    trace['steps'] = steps
+    bp = trace.get('breakpoint')
+    if isinstance(bp, str):
+        trace['breakpoint'] = {'reason': bp}
+    story = trace.get('story')
+    if isinstance(story, str):
+        trace['story'] = [story]
+    elif not (isinstance(story, list) and all(isinstance(x, str) for x in story)):
+        trace.pop('story', None)
+    structured['trace'] = trace
+
 
 def merge_agent_results(agent_out: dict, staging: Optional[dict]) -> dict:
     """合并 MCP staging 与 stdout 提取结果（纯函数）。
@@ -404,6 +493,7 @@ def merge_agent_results(agent_out: dict, staging: Optional[dict]) -> dict:
     if isinstance(agent_struct, dict):
         for k, v in agent_struct.items():
             structured.setdefault(k, v)
+    _normalize_trace(structured)
 
     advice = agent_out.get('advice')
     advice_ok = bool(advice) and not str(advice).startswith('[ERROR]')
