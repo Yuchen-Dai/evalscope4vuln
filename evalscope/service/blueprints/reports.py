@@ -94,7 +94,8 @@ def serve_media_file():
 
     Security:
         - Only files with known media extensions are served.
-        - The file must exist and be a regular file.
+        - The file must exist, be a regular file and live under the
+          server-side outputs root (rejects arbitrary absolute paths).
     """
     file_path = request.args.get('path', '').strip()
     if not file_path:
@@ -102,6 +103,10 @@ def serve_media_file():
 
     # Normalise to absolute path and reject directory traversal
     file_path = os.path.realpath(file_path)
+
+    root = os.path.realpath(_root_path())
+    if os.path.commonpath([file_path, root]) != root:
+        return jsonify({'error': 'Path is outside the outputs root'}), 403
 
     ext = os.path.splitext(file_path)[1].lower()
     if ext not in _MEDIA_EXTENSIONS:
@@ -118,9 +123,13 @@ def serve_media_file():
 
 
 def _root_path() -> str:
-    # Priority: URL query param > app config (from --outputs CLI arg) > default
+    # Security: the root is ALWAYS the server-side outputs root (--outputs).
+    # It used to be overridable via the `root_path` query/body param, which let
+    # any client point list/scan/delete at arbitrary directories. The frontend
+    # only ever echoes back the value it fetched from /api/v1/config, so
+    # ignoring the client-supplied value changes nothing for legitimate use.
     from flask import current_app
-    return request.args.get('root_path', current_app.config.get('OUTPUTS_ROOT') or _DEFAULT_ROOT)
+    return current_app.config.get('OUTPUTS_ROOT') or _DEFAULT_ROOT
 
 
 def _apply_chart_theme(fig: go.Figure, theme: str) -> None:
@@ -275,6 +284,9 @@ def delete_report():
         validate_task_id(task_id)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    from ..utils.process import is_task_running
+    if is_task_running(task_id):
+        return jsonify({'error': f'Task {task_id} is still running; stop it before deleting'}), 409
     root = _root_path()
     abs_root = os.path.abspath(root)
     target = os.path.join(root, task_id)
@@ -690,7 +702,7 @@ def invoke_fn_advice():
     report_name = data.get('report_name')
     dataset_name = data.get('dataset_name')
     gt_ids = data.get('gt_ids') or None
-    root = data.get('root_path') or _root_path()
+    root = _root_path()  # body root_path ignored (server-side outputs root only)
     if not report_name or not dataset_name:
         return jsonify({'error': 'report_name and dataset_name are required'}), 400
     task_id = request.headers.get('EvalScope-Task-Id', '')
@@ -852,7 +864,7 @@ def compare_trace():
     纯展示，无 LLM；FP 无 gt 锚点不纳入。
     """
     body = request.get_json(silent=True) or {}
-    root = body.get('root_path') or _root_path()
+    root = _root_path()  # body root_path ignored (server-side outputs root only)
     report_names = body.get('report_names') or []
     dataset_name = body.get('dataset_name')
     gt_id = body.get('gt_id')
