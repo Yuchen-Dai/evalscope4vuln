@@ -34,11 +34,11 @@ const BASE = '/api/v1/reports'
 export async function listReports(params: {
   rootPath: string
   search?: string
-  models?: string[]
+  projects?: string[]
   datasets?: string[]
   scoreMin?: number
   scoreMax?: number
-  sortBy?: 'score' | 'model' | 'dataset' | 'time'
+  sortBy?: 'score' | 'project' | 'dataset' | 'time'
   sortOrder?: 'asc' | 'desc'
   page?: number
   pageSize?: number
@@ -49,7 +49,7 @@ export async function listReports(params: {
     params: {
       root_path: params.rootPath,
       search: params.search,
-      models: params.models?.join(';'),
+      projects: params.projects?.join(';'),
       datasets: params.datasets?.join(';'),
       score_min: params.scoreMin,
       score_max: params.scoreMax,

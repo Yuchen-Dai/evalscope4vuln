@@ -44,7 +44,7 @@ export default function ReportCard({ report, selected, onSelect, onClick }: Repo
     >
       <SelectionCheckbox
         checked={selected}
-        label={`${t('reports.selectReport')}: ${report.model_name}`}
+        label={`${t('reports.selectReport')}: ${report.project_name || report.model_name}`}
         onClick={(e) => {
           e.stopPropagation()
           onSelect(report.name)
@@ -57,12 +57,12 @@ export default function ReportCard({ report, selected, onSelect, onClick }: Repo
         className="flex-1 min-w-0 min-h-11 flex items-center gap-4 cursor-pointer text-left"
         onClick={() => onClick(report.name)}
       >
-        {/* Model + Dataset */}
+        {/* Project + Dataset */}
         <span className="block flex-1 min-w-0">
-          {/* Primary row: model name + timestamp for disambiguation */}
+          {/* Primary row: project name + timestamp for disambiguation */}
           <span className="flex items-baseline gap-2 flex-wrap">
             <span className="font-bold text-base text-[var(--text)] break-words min-w-0">
-              {report.model_name}
+              {report.project_name || report.model_name}
             </span>
             {formattedDate && (
               <span className="text-xs text-[var(--text-muted)] font-mono shrink-0">

@@ -2,9 +2,9 @@ import type { Dict } from './types'
 
 export const en: Dict = {
   totalEvaluations: 'Total Evaluations',
-  modelsEvaluated: 'Scanners Evaluated',
+  projectsEvaluated: 'Projects Evaluated',
   noReportsHint: 'Enter an output directory and click Scan to discover reports',
-  model: 'Model',
+  projectName: 'Project Name',
   dataset: 'Dataset',
   result: 'Result',
   date: 'Date',
@@ -12,7 +12,7 @@ export const en: Dict = {
   samples: 'targets',
   welcomeTitle: 'Welcome to EvalScope',
   welcomeDesc: 'Enter an output directory path and scan to get started',
-  searchPlaceholder: 'Search models or datasets...',
+  searchPlaceholder: 'Search projects or datasets...',
   runs: 'runs',
   latestRun: 'Latest Run',
   recentRuns: 'Recent Runs',
@@ -25,9 +25,9 @@ export const en: Dict = {
 
 export const zh: Dict = {
   totalEvaluations: '评测总数',
-  modelsEvaluated: '已测评扫描器',
+  projectsEvaluated: '已测评项目数',
   noReportsHint: '输入输出目录路径并点击扫描来发现报告',
-  model: '模型',
+  projectName: '项目名称',
   dataset: '数据集',
   result: '结果',
   date: '日期',
@@ -35,7 +35,7 @@ export const zh: Dict = {
   samples: '目标',
   welcomeTitle: '欢迎使用 EvalScope',
   welcomeDesc: '输入输出目录路径并扫描即可开始',
-  searchPlaceholder: '搜索模型或数据集...',
+  searchPlaceholder: '搜索项目或数据集...',
   runs: '次评估',
   latestRun: '最近运行',
   recentRuns: '最近运行',

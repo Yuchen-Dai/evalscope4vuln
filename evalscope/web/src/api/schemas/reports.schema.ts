@@ -116,6 +116,7 @@ export const vulnSummarySchema = z.object({
 export const reportSummarySchema = z.object({
   name: z.string(),
   model_name: z.string(),
+  project_name: z.string().optional(),
   dataset_name: z.string(),
   score: z.number(),
   metric_name: z.string().optional(),
@@ -134,7 +135,7 @@ export const listReportsResponseSchema = z.object({
   page: z.number(),
   page_size: z.number(),
   filters: z.object({
-    available_models: z.array(z.string()),
+    available_projects: z.array(z.string()),
     available_datasets: z.array(z.string()),
   }),
 })

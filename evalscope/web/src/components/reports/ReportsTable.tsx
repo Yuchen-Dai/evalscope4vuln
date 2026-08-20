@@ -27,11 +27,11 @@ function formatTimestamp(ts: string): string {
 /**
  * Desktop (>=1024px) tabular view of the evaluation history.
  *
- * Columns are fixed and ordered: model, dataset, time, samples, score, status.
- * Each run's model/dataset are derived through
- * `buildDisplayLabel` so the row shows a meaningful label rather than the raw
- * timestamped run name. A leading selection column is always visible
- * while row clicks continue to open the report detail.
+ * Columns are fixed and ordered: project, dataset, time, samples, score, status.
+ * Each run's project name falls back to the parsed model / raw run name;
+ * dataset is derived through `buildDisplayLabel` so the row shows a meaningful
+ * label rather than the raw timestamped run name. A leading selection column
+ * is always visible while row clicks continue to open the report detail.
  */
 export default function ReportsTable({
   reports,
@@ -52,9 +52,9 @@ export default function ReportsTable({
             <th scope="col" className="w-10 px-4 py-3">
               <SelectionCheckbox checked={allSelected} label={t('reports.selectAll')} onClick={onToggleSelectAll} />
             </th>
-            {/* Fixed, ordered columns: model, dataset, time, samples, score, status */}
+            {/* Fixed, ordered columns: project, dataset, time, samples, score, status */}
             <th scope="col" className="px-4 py-3 text-xs font-semibold text-[var(--text-muted)]">
-              {t('reports.columns.model')}
+              {t('reports.columns.projectName')}
             </th>
             <th scope="col" className="px-4 py-3 text-xs font-semibold text-[var(--text-muted)]">
               {t('reports.columns.dataset')}
@@ -80,7 +80,7 @@ export default function ReportsTable({
           {reports.map((report) => {
             const isSelected = selectedSet.has(report.name)
             const parsed = buildDisplayLabel(report.name)
-            const model = report.model_name || parsed.model || report.name
+            const project = report.project_name || report.model_name || parsed.model || report.name
             const dataset = report.dataset_name || parsed.dataset
             const metricName = report.metric_name ?? 'score'
             const scoreValue = report.metric_name === '' ? null : report.score
@@ -98,7 +98,7 @@ export default function ReportsTable({
                 <td className="px-4 py-3">
                   <SelectionCheckbox
                     checked={isSelected}
-                    label={`${t('reports.selectReport')}: ${model}`}
+                    label={`${t('reports.selectReport')}: ${project}`}
                     onClick={(e) => {
                       e.stopPropagation()
                       onToggleSelect(report.name)
@@ -106,7 +106,7 @@ export default function ReportsTable({
                   />
                 </td>
                 <td className="px-4 py-3 font-semibold text-[var(--text)] break-words min-w-0">
-                  {model}
+                  {project}
                 </td>
                 <td className="px-4 py-3 text-[var(--text-muted)] break-words min-w-0">
                   {dataset}

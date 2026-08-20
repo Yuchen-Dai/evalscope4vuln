@@ -170,6 +170,12 @@ def _primary_metric(r: Report):
 def _build_report_meta(report_name: str, root: str) -> dict:
     """Load a report and return lightweight metadata for the list endpoint."""
     try:
+        # project_name is the unique turing project display name submitted per
+        # run; it is persisted to <work_dir>/scan_config.json by eval.py at
+        # invoke time (work_dir == root/<prefix>). Falls back to '' for legacy
+        # / non-vuln reports lacking the file.
+        prefix, _model, _datasets = process_report_name(report_name)
+        project_name = _read_scan_config(os.path.join(root, prefix)).get('project_name', '')
         report_list, datasets, _ = load_single_report(root, report_name)
     except Exception:
         return None
@@ -237,6 +243,7 @@ def _build_report_meta(report_name: str, root: str) -> dict:
     return {
         'name': report_name,
         'model_name': first.model_name,
+        'project_name': project_name,
         'dataset_name': ', '.join(dataset_names) if len(dataset_names) > 1 else
         (dataset_names[0] if dataset_names else ''),
         'score': avg_score,
@@ -285,12 +292,12 @@ def list_reports():
 
     Query params:
         root_path  (str):   output root directory (required)
-        search     (str):   fuzzy search on model/dataset name
-        models     (str):   semicolon-separated model filter
+        search     (str):   fuzzy search on project/dataset name
+        projects   (str):   semicolon-separated project filter
         datasets   (str):   semicolon-separated dataset filter
         score_min  (float): minimum score (0-1)
         score_max  (float): maximum score (0-1)
-        sort_by    (str):   score / model / dataset / time (default: time)
+        sort_by    (str):   score / project / dataset / time (default: time)
         sort_order (str):   asc / desc (default: desc)
         page       (int):   page number (default: 1)
         page_size  (int):   items per page (default: 20)
@@ -305,7 +312,7 @@ def list_reports():
                 'page': 1,
                 'page_size': 20,
                 'filters': {
-                    'available_models': [],
+                    'available_projects': [],
                     'available_datasets': []
                 },
             }), 200
@@ -318,19 +325,24 @@ def list_reports():
             if meta is not None:
                 items.append(meta)
 
-        # Collect available filter values before filtering
-        available_models = sorted({it['model_name'] for it in items})
+        # Collect available filter values before filtering (drop empty
+        # project_name so legacy reports don't surface a blank filter option).
+        available_projects = sorted({it['project_name'] for it in items if it['project_name']})
         available_datasets = sorted({ds for it in items for ds in it['_datasets']})
 
         # --- Filters ---
         search = request.args.get('search', '').strip().lower()
         if search:
-            items = [it for it in items if search in it['model_name'].lower() or search in it['dataset_name'].lower()]
+            items = [
+                it for it in items
+                if search in it['project_name'].lower() or search in it['model_name'].lower()
+                or search in it['dataset_name'].lower()
+            ]
 
-        models_filter = request.args.get('models', '').strip()
-        if models_filter:
-            model_set = {m.strip().lower() for m in models_filter.split(';') if m.strip()}
-            items = [it for it in items if it['model_name'].lower() in model_set]
+        projects_filter = request.args.get('projects', '').strip()
+        if projects_filter:
+            project_set = {p.strip().lower() for p in projects_filter.split(';') if p.strip()}
+            items = [it for it in items if it['project_name'].lower() in project_set]
 
         datasets_filter = request.args.get('datasets', '').strip()
         if datasets_filter:
@@ -351,7 +363,7 @@ def list_reports():
 
         sort_key_map = {
             'score': lambda x: x['score'],
-            'model': lambda x: x['model_name'].lower(),
+            'project': lambda x: x['project_name'].lower(),
             'dataset': lambda x: x['dataset_name'].lower(),
             'time': lambda x: x['timestamp'],
         }
@@ -376,7 +388,7 @@ def list_reports():
             'page': page,
             'page_size': page_size,
             'filters': {
-                'available_models': available_models,
+                'available_projects': available_projects,
                 'available_datasets': available_datasets,
             },
         }), 200

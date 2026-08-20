@@ -26,7 +26,7 @@ const PAGE_SIZE = 20
 
 const defaultFilters: ReportFilters = {
   search: '',
-  models: [],
+  projects: [],
   datasets: [],
   scoreMin: 0,
   scoreMax: 1,
@@ -53,7 +53,7 @@ export default function ReportsPage() {
   const [page, setPage] = useState(1)
   const [reports, setReports] = useState<ReportSummary[]>([])
   const [total, setTotal] = useState(0)
-  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [availableProjects, setAvailableProjects] = useState<string[]>([])
   const [availableDatasets, setAvailableDatasets] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,7 +108,7 @@ export default function ReportsPage() {
         const res: ListReportsResponse = await reportsApi.listReports({
           rootPath,
           search: debouncedSearch || undefined,
-          models: filters.models.length ? filters.models : undefined,
+          projects: filters.projects.length ? filters.projects : undefined,
           datasets: filters.datasets.length ? filters.datasets : undefined,
           scoreMin: filters.scoreMin > 0 ? filters.scoreMin : undefined,
           scoreMax: filters.scoreMax < 1 ? filters.scoreMax : undefined,
@@ -121,7 +121,7 @@ export default function ReportsPage() {
         if (controller.signal.aborted) return
         setReports(res.reports)
         setTotal(res.total)
-        setAvailableModels(res.filters.available_models)
+        setAvailableProjects(res.filters.available_projects)
         setAvailableDatasets(res.filters.available_datasets)
       } catch (err) {
         // A superseded request aborts; drop its outcome without surfacing an error.
@@ -136,7 +136,7 @@ export default function ReportsPage() {
     }
     load()
     return () => controller.abort()
-  }, [rootPath, scanToken, debouncedSearch, filters.models, filters.datasets, filters.scoreMin, filters.scoreMax, filters.sortBy, filters.sortOrder, page, reloadToken])
+  }, [rootPath, scanToken, debouncedSearch, filters.projects, filters.datasets, filters.scoreMin, filters.scoreMax, filters.sortBy, filters.sortOrder, page, reloadToken])
 
   // ---- Selection helpers ----
   const currentPageNames = useMemo(() => reports.map((r) => r.name), [reports])
@@ -237,7 +237,7 @@ export default function ReportsPage() {
   const hasActiveFilters = useMemo(
     () =>
       filters.search.trim() !== '' ||
-      filters.models.length > 0 ||
+      filters.projects.length > 0 ||
       filters.datasets.length > 0 ||
       filters.scoreMin > 0 ||
       filters.scoreMax < 1,
@@ -265,7 +265,7 @@ export default function ReportsPage() {
       {/* Filters */}
       <ReportFiltersBar
         filters={filters}
-        availableModels={availableModels}
+        availableProjects={availableProjects}
         availableDatasets={availableDatasets}
         onChange={handleFiltersChange}
       />

@@ -39,7 +39,7 @@ function RunRow({ report, onClick }: { report: ReportSummary; onClick: () => voi
         <FileText size={16} strokeWidth={2} />
       </span>
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="type-body-sm text-[var(--text)] break-words">{report.model_name}</span>
+        <span className="type-body-sm text-[var(--text)] break-words">{report.project_name || report.model_name}</span>
         <span className="type-caption-mono text-[var(--text-muted)] break-words md:hidden">{report.dataset_name}</span>
         <span className="type-caption-mono mt-0.5 text-[var(--text-dim)] md:hidden">{formatShort(report.timestamp || '')}</span>
       </div>
@@ -96,7 +96,7 @@ export default function DashboardPage() {
     const sorted = [...reports].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
     if (!q) return sorted
     return sorted.filter((r) =>
-      (r.model_name || '').toLowerCase().includes(q) ||
+      (r.project_name || r.model_name || '').toLowerCase().includes(q) ||
       (r.dataset_name || '').toLowerCase().includes(q),
     )
   }, [reports, query])
@@ -113,7 +113,7 @@ export default function DashboardPage() {
     let totalFn = 0
     let recallSum = 0
     reports.forEach((r) => {
-      models.add(r.model_name)
+      models.add(r.project_name || r.model_name)
       if (r.vuln_summary) {
         totalFn += r.vuln_summary.fn
         recallSum += r.vuln_summary.recall
@@ -164,7 +164,7 @@ export default function DashboardPage() {
           <KpiCard
             icon={<Cpu size={18} strokeWidth={2} />}
             value={String(kpi.models)}
-            label={t('dashboard.modelsEvaluated')}
+            label={t('dashboard.projectsEvaluated')}
             gradient="var(--kpi-grad-2)"
             delay={120}
           />
@@ -217,7 +217,7 @@ export default function DashboardPage() {
             <div className="divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-sm)]">
               <div className="hidden grid-cols-[3rem_minmax(8rem,1fr)_minmax(10rem,1.5fr)_8rem_7rem_1rem] items-center gap-x-3 border-b border-[var(--border)] px-3 py-3 text-xs font-semibold text-[var(--text-muted)] md:grid">
                 <span />
-                <span>{t('dashboard.model')}</span>
+                <span>{t('dashboard.projectName')}</span>
                 <span>{t('dashboard.dataset')}</span>
                 <span>{t('dashboard.date')}</span>
                 <span>{t('dashboard.result')}</span>

@@ -8,17 +8,17 @@ import Button from '@/components/ui/Button'
 
 export interface ReportFilters {
   search: string
-  models: string[]
+  projects: string[]
   datasets: string[]
   scoreMin: number
   scoreMax: number
-  sortBy: 'score' | 'model' | 'dataset' | 'time'
+  sortBy: 'score' | 'project' | 'dataset' | 'time'
   sortOrder: 'asc' | 'desc'
 }
 
 interface ReportFiltersProps {
   filters: ReportFilters
-  availableModels: string[]
+  availableProjects: string[]
   availableDatasets: string[]
   onChange: (filters: ReportFilters) => void
 }
@@ -94,7 +94,7 @@ function MultiSelectDropdown({
 
 export default function ReportFiltersBar({
   filters,
-  availableModels,
+  availableProjects,
   availableDatasets,
   onChange,
 }: ReportFiltersProps) {
@@ -108,16 +108,16 @@ export default function ReportFiltersBar({
   const sortOptions: { value: ReportFilters['sortBy']; label: string }[] = [
     { value: 'time', label: t('reports.filters.time') },
     { value: 'score', label: t('reports.filters.score') },
-    { value: 'model', label: t('reports.filters.model') },
+    { value: 'project', label: t('reports.filters.project') },
     { value: 'dataset', label: t('reports.filters.dataset') },
   ]
 
   const activeFilters: { key: string; label: string; onRemove: () => void }[] = []
-  filters.models.forEach((m) =>
+  filters.projects.forEach((p) =>
     activeFilters.push({
-      key: `model:${m}`,
-      label: `model:${m}`,
-      onRemove: () => update({ models: filters.models.filter((x) => x !== m) }),
+      key: `project:${p}`,
+      label: `project:${p}`,
+      onRemove: () => update({ projects: filters.projects.filter((x) => x !== p) }),
     }),
   )
   filters.datasets.forEach((d) =>
@@ -152,10 +152,10 @@ export default function ReportFiltersBar({
         />
 
         <MultiSelectDropdown
-          label={t('reports.filters.model')}
-          options={availableModels}
-          selected={filters.models}
-          onChange={(models) => update({ models })}
+          label={t('reports.filters.project')}
+          options={availableProjects}
+          selected={filters.projects}
+          onChange={(projects) => update({ projects })}
         />
 
         <MultiSelectDropdown

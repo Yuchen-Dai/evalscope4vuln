@@ -7,7 +7,7 @@ export const en: Dict = {
   scanning: 'Scanning...',
   filters: {
     search: 'Search reports...',
-    model: 'Model',
+    project: 'Project',
     dataset: 'Dataset',
     sortBy: 'Sort By',
     time: 'Time',
@@ -24,7 +24,7 @@ export const en: Dict = {
   deleteConfirm: 'Delete ${n} selected report(s)? This cannot be undone.',
   deleteFailed: 'Delete failed: ${msg}',
   columns: {
-    model: 'Model',
+    projectName: 'Project Name',
     dataset: 'Dataset',
     time: 'Time',
     samples: 'Targets',
@@ -52,7 +52,7 @@ export const zh: Dict = {
   scanning: '扫描中...',
   filters: {
     search: '搜索报告...',
-    model: '模型',
+    project: '项目',
     dataset: '数据集',
     sortBy: '排序',
     time: '时间',
@@ -69,7 +69,7 @@ export const zh: Dict = {
   deleteConfirm: '确定删除选中的 ${n} 个 report？此操作不可恢复。',
   deleteFailed: '删除失败: ${msg}',
   columns: {
-    model: '模型',
+    projectName: '项目名称',
     dataset: '数据集',
     time: '时间',
     samples: '目标数',
