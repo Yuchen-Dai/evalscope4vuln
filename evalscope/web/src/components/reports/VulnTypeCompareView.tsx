@@ -106,7 +106,7 @@ export default function VulnTypeCompareView({ models }: Props) {
             {models.map((m, i) => (
               <th
                 key={m.name}
-                colSpan={2}
+                colSpan={6}
                 className="text-center px-3 py-2 text-xs font-semibold whitespace-nowrap border-l border-[var(--border)]"
                 style={{ color: `var(--compare-${i % 3}-dot)` }}
                 title={m.label}
@@ -132,7 +132,7 @@ export default function VulnTypeCompareView({ models }: Props) {
                 <th
                   key={`${m.name}-${short}`}
                   title={full}
-                  className="px-2 py-1.5 text-[10px] font-medium text-[var(--text-muted)] text-center whitespace-nowrap border-l border-[var(--border)] first:border-l-0"
+                  className="px-2 py-1.5 text-[10px] font-medium text-[var(--text-muted)] text-center whitespace-nowrap border-l border-[var(--border)]"
                 >
                   {short}
                 </th>
