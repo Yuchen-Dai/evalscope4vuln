@@ -13,14 +13,14 @@ from evalscope.api.evaluator import TaskState
 from evalscope.api.messages import ChatMessageUser
 from evalscope.api.metric import Score
 from evalscope.api.model import Model, ModelOutput
-from evalscope.utils.logger import get_logger
-
 from evalscope.benchmarks.vuln_scan import config as vb_config
-from evalscope.benchmarks.vuln_scan.turing.client import TuringClient, parse_findings
-from evalscope.benchmarks.vuln_scan.scoring.matcher import match as do_match
-from evalscope.benchmarks.vuln_scan.scoring.metrics import compute_metrics
 from evalscope.benchmarks.vuln_scan.dataset.adapter import load_gt
 from evalscope.benchmarks.vuln_scan.schemas import MatchResult, MetricsSnapshot, ScanConfig
+from evalscope.benchmarks.vuln_scan.scoring.matcher import match as do_match
+from evalscope.benchmarks.vuln_scan.scoring.metrics import compute_metrics
+from evalscope.benchmarks.vuln_scan.turing.client import TuringClient, parse_findings
+from evalscope.benchmarks.vuln_scan.turing.offline import load_sessions_report
+from evalscope.utils.logger import get_logger
 
 logger = get_logger()
 
@@ -28,12 +28,13 @@ logger = get_logger()
 def _run_async(coro):
     """在同步 run_inference 中跑 async TuringClient（evalscope 用线程池调用 run_inference）。"""
     try:
-        asyncio.get_running_loop()       # 已在 loop 内（罕见）→ 新线程跑
+        asyncio.get_running_loop()  # 已在 loop 内（罕见）→ 新线程跑
         import threading
         box = [None]
 
         def _r():
             box[0] = asyncio.run(coro)
+
         t = threading.Thread(target=_r)
         t.start()
         t.join()
@@ -83,7 +84,9 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
         sc = _build_scan_config(scan_cfg)
         # 上传源码创建项目（真实图灵 server-side 扫描，代码经上传交付；local_path 在服务器不存在会 400）
         source_filename = os.path.basename(sc.source_path)
-        logger.info(f'[vuln_scan] → POST /projects/upload  display_name="{project_name}" filename="{source_filename}" source="{sc.source_path}" version="1.0.0"')
+        logger.info(
+            f'[vuln_scan] → POST /projects/upload  display_name="{project_name}" filename="{source_filename}" source="{sc.source_path}" version="1.0.0"'
+        )
         try:
             pid = await client.upload_project(project_name, source_filename, sc.source_path)
         except Exception as e:
@@ -92,15 +95,17 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
             raise
         logger.info(f'[vuln_scan] ← project_id={pid}')
         # 提交扫描
-        logger.info(f'[vuln_scan] → POST /scan-with-preprocess  platforms={",".join(sc.platforms)} '
-                    f'priority={sc.priority} model_name={model_name or "(默认)"} '
-                    f'max_concurrency={sc.max_concurrency or "(默认)"} '
-                    f'phase_timeout=({sc.phase1_timeout or "-"}/{sc.phase2_timeout or "-"}/{sc.phase3_timeout or "-"})')
+        logger.info(
+            f'[vuln_scan] → POST /scan-with-preprocess  platforms={",".join(sc.platforms)} '
+            f'priority={sc.priority} model_name={model_name or "(默认)"} '
+            f'max_concurrency={sc.max_concurrency or "(默认)"} '
+            f'phase_timeout=({sc.phase1_timeout or "-"}/{sc.phase2_timeout or "-"}/{sc.phase3_timeout or "-"})'
+        )
         job_id = await client.submit_scan(pid, sc)
         logger.info(f'[vuln_scan] ← job_id={job_id}')
         logger.info(f'[vuln_scan] 开始轮询（指数退避: 初始 5s, 上限 120s, 图灵: {base_url}）')
         deadline = time.time() + float(scan_cfg.get('timeout', vb_config.POLL_TIMEOUT))
-        interval = 5.0       # 初始轮询间隔
+        interval = 5.0  # 初始轮询间隔
         max_interval = 120.0  # 上限（避免退避太久）
         poll_count = 0
         prev_finding_count = -1
@@ -139,13 +144,17 @@ async def _scan_async(scan_cfg: Dict[str, Any], project_name: str, model_name: s
                 cur_count = len(cur_findings)
                 if cur_count != prev_finding_count:
                     # finding 数有变化（新增）→ 重置退避（可能正在密集产出）
-                    logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
-                                f'已发现 {cur_count} 个漏洞（状态: {status_str}）')
+                    logger.info(
+                        f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
+                        f'已发现 {cur_count} 个漏洞（状态: {status_str}）'
+                    )
                     prev_finding_count = cur_count
-                    interval = 5.0   # 有新 finding → 重置为初始间隔（密集期）
+                    interval = 5.0  # 有新 finding → 重置为初始间隔（密集期）
                 else:
-                    logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
-                                f'已发现 {cur_count} 个漏洞，无新增（状态: {status_str}）')
+                    logger.info(
+                        f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: '
+                        f'已发现 {cur_count} 个漏洞，无新增（状态: {status_str}）'
+                    )
                     interval = min(interval * 1.5, max_interval)
             except Exception:
                 logger.info(f'[vuln_scan] 第{poll_count}轮（间隔{interval:.0f}s）: 扫描中（状态: {status_str}）')
@@ -172,7 +181,7 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_aggregation_name = False   # 报告 metric_name 不带 mean_ 前缀
+        self.add_aggregation_name = False  # 报告 metric_name 不带 mean_ 前缀
 
     # 本地 jsonl 加载（强制 LocalDataLoader）
     def load_from_disk(self, **kwargs):
@@ -203,7 +212,10 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
                 meta['project_name'] = tc_scan['project_name']
             meta['scan_config'] = {
                 **(meta.get('scan_config') or {}),
-                **{k: v for k, v in tc_scan.items() if k != 'project_name'},
+                **{
+                    k: v
+                    for k, v in tc_scan.items() if k != 'project_name'
+                },
             }
         return Sample(
             input=record.get('input') or f"Scan target: {meta.get('project_name', 'unknown')}",
@@ -211,34 +223,69 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
             metadata=meta,
         )
 
-    # 调图灵 REST（不调 model.generate），拿回 finding 列表
+    # 调图灵 REST（不调 model.generate），拿回 finding 列表；scan_config 带 sessions_file 时走离线导入
     def run_inference(self, model: Model, sample: Sample, output_dir: str, **kwargs) -> TaskState:
         scan_cfg = (sample.metadata or {}).get('scan_config', {}) or {}
         project_name = (sample.metadata or {}).get('project_name', 'unknown')
         model_name = scan_cfg.get('model_name') or model.name or '(默认)'
-        logger.info(f'[vuln_scan] 开始扫描 {project_name}（模型: {model_name}）...')
-        # source_path 相对 benchmark dataset 目录解析（部署无关；绝对路径直用）
-        sp = scan_cfg.get('source_path', '')
-        if sp and not os.path.isabs(sp):
-            scan_cfg = {**scan_cfg, 'source_path': os.path.join(self._benchmark_meta.dataset_id, sp)}
-        raw_findings, project_id, job_id = _run_async(_scan_async(scan_cfg, project_name, model_name))
-        logger.info(f'[vuln_scan] {project_name} 扫描完成，finding 数={len(raw_findings)} '
-                    f'(project_id={project_id} job_id={job_id})')
+        # source_path/sessions_file 相对 benchmark dataset 目录解析（部署无关；绝对路径直用）
+        for key in ('source_path', 'sessions_file'):
+            v = scan_cfg.get(key, '')
+            if v and not os.path.isabs(v):
+                scan_cfg = {**scan_cfg, key: os.path.join(self._benchmark_meta.dataset_id, v)}
+        sessions_file = scan_cfg.get('sessions_file') or ''
+        offline_stats = None
+        if sessions_file:
+            # 离线导入：不登录/不上传/不提交图灵，直接从 sessions 导出文件提取已入库的 findings。
+            # project_id/job_id 从文件内 tool 载荷尽力提取，对齐在线链路的 metadata 口径
+            # （追溯展示用；trace 等数据获取仍优先本地 sessions_file，见 reports.py）
+            logger.info(f'[vuln_scan] 离线导入 {project_name}（模型: {model_name}）sessions={sessions_file}')
+            rep = load_sessions_report(sessions_file)
+            st = rep.stats
+            logger.info(
+                f"[vuln_scan] 离线导入完成: sessions={st['sessions']} "
+                f"detections={st['detections']} findings={st['findings']} "
+                f"findings被拒收={st['findings_rejected']} validations={st['validations']}"
+                f"（文件内 modelID: {','.join(st['model_ids']) or '?'}）"
+            )
+            if st['findings_rejected']:
+                logger.warning(
+                    f"[vuln_scan] {st['findings_rejected']} 个 finding 提交被图灵拒收"
+                    f"（未入库，不计入评测），拒因样本: {st['reject_samples']}"
+                )
+            raw_findings = rep.findings
+            project_id, job_id = st.get('project_id', ''), st.get('job_id', '')
+            if project_id or job_id:
+                logger.info(f'[vuln_scan] 导出上下文: project_id={project_id or "?"} job_id={job_id or "?"}')
+            offline_stats = st
+        else:
+            logger.info(f'[vuln_scan] 开始扫描 {project_name}（模型: {model_name}）...')
+            raw_findings, project_id, job_id = _run_async(_scan_async(scan_cfg, project_name, model_name))
+        logger.info(
+            f'[vuln_scan] {project_name} 完成，finding 数={len(raw_findings)} '
+            f'(project_id={project_id or "-"} job_id={job_id or "-"}'
+            f'{"，离线导入" if offline_stats else ""})'
+        )
 
         model_output = ModelOutput.from_content(
             model=model.name,
-            content=json.dumps({'project': project_name, 'findings_count': len(raw_findings)},
-                               ensure_ascii=False),
+            content=json.dumps({
+                'project': project_name,
+                'findings_count': len(raw_findings)
+            }, ensure_ascii=False),
             stop_reason='stop',
         )
         # project_id/job_id/source_path 落 metadata → 随 prediction cache 持久化，供后置
-        # FN 漏报分析（拉图灵 sessions + 解压源码给 opencode agent）
+        # FN 漏报分析（拉图灵 sessions + 解压源码给 opencode agent）；离线任务 pid/jid 为空，
+        # scan_mode/sessions_file/offline_stats 标记离线来源（trace 对比等按此回读本地文件）
         model_output.metadata = {
             'findings_raw': raw_findings,
             'project_name': project_name,
             'project_id': project_id,
             'job_id': job_id,
-            'source_path': scan_cfg.get('source_path', ''),  # 已绝对化（上文 :222 解析）
+            'source_path': scan_cfg.get('source_path', ''),  # 已绝对化（上文解析）
+            'scan_mode': 'offline' if offline_stats else 'turing',
+            'sessions_file': sessions_file,
         }
         return TaskState(
             model=model.name,
@@ -249,8 +296,9 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         )
 
     # 复用 matcher + metrics 算 TP/FP/FN/P/R/Coverage，按 vuln_type 分桶
-    def match_score(self, original_prediction: str, filtered_prediction: str,
-                    reference: str, task_state: TaskState) -> Score:
+    def match_score(
+        self, original_prediction: str, filtered_prediction: str, reference: str, task_state: TaskState
+    ) -> Score:
         raw = []
         if task_state.output is not None and task_state.output.metadata:
             raw = task_state.output.metadata.get('findings_raw', []) or []
@@ -311,7 +359,9 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
         score.explanation = (
             f'findings={len(findings)} gt={len(gt_vulns)} '
             f'TP={snap.tp} FP={snap.fp} FN={snap.fn} '
-            f'P={snap.precision:.3f} R={snap.recall:.3f} Cov={snap.coverage:.3f}')
+            f'P={snap.precision:.3f} R={snap.recall:.3f} Cov={snap.coverage:.3f}'
+        )
+
         # 匹配明细落 score.metadata（不被指标聚合，随 review 缓存传给前端 predictions 漏洞视图）
         # schema:2 含两套匹配（type=类型+位置 / loc=仅位置），供前端 toggle 对照
         def _pack(mr_x: MatchResult, snap_x: MetricsSnapshot) -> dict:
@@ -319,16 +369,26 @@ class VulnBenchmarkAdapter(DefaultDataAdapter):
                 'matches': [m.model_dump() for m in mr_x.matches],
                 'classifications': dict(mr_x.classifications),
                 'missed_gt': list(mr_x.missed_gt),
-                'summary': {'tp': snap_x.tp, 'fp': snap_x.fp, 'fn': snap_x.fn,
-                            'precision': snap_x.precision, 'recall': snap_x.recall,
-                            'f1': snap_x.f1, 'coverage': snap_x.coverage,
-                            'findings_total': snap_x.findings_total, 'gt_total': snap_x.gt_total},
+                'summary': {
+                    'tp': snap_x.tp,
+                    'fp': snap_x.fp,
+                    'fn': snap_x.fn,
+                    'precision': snap_x.precision,
+                    'recall': snap_x.recall,
+                    'f1': snap_x.f1,
+                    'coverage': snap_x.coverage,
+                    'findings_total': snap_x.findings_total,
+                    'gt_total': snap_x.gt_total
+                },
                 'buckets': [b.model_dump() for b in snap_x.buckets],
             }
-        score.metadata = {'vuln_match': {
-            'schema': 2,
-            'gt': [g.model_dump() for g in gt_vulns],
-            'type': _pack(mr_type, snap_type),
-            'loc': _pack(mr_loc, snap_loc),
-        }}
+
+        score.metadata = {
+            'vuln_match': {
+                'schema': 2,
+                'gt': [g.model_dump() for g in gt_vulns],
+                'type': _pack(mr_type, snap_type),
+                'loc': _pack(mr_loc, snap_loc),
+            }
+        }
         return score

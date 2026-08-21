@@ -346,8 +346,7 @@ def list_reports():
         search = request.args.get('search', '').strip().lower()
         if search:
             items = [
-                it for it in items
-                if search in it['project_name'].lower() or search in it['model_name'].lower()
+                it for it in items if search in it['project_name'].lower() or search in it['model_name'].lower()
                 or search in it['dataset_name'].lower()
             ]
 
@@ -729,6 +728,9 @@ def invoke_fn_advice():
         if not jcfg:
             return jsonify({'status': 'error', 'error': 'judge 模型未配置（点击右上角 ⚙ 设置中配置）'}), 200
         pid, jid = meta.get('project_id'), meta.get('job_id')
+        if _read_scan_config(work_dir).get('sessions_file'):
+            # 离线报告虽可能带真实 pid/jid，但平台连不上其来源图灵，FN 分析无法工作
+            return jsonify({'status': 'error', 'error': '离线导入报告不支持 FN 分析（无图灵 job 上下文，需在线扫描报告）'}), 200
         if not pid or not jid:
             return jsonify({'status': 'error', 'error': '该报告无 project_id/job_id（老报告，需重跑评测以持久化）'}), 200
         if fn_advice_runner.is_fn_task_running_by_prefix(root, prefix, dataset_name):
@@ -801,21 +803,9 @@ def trace_for_finding():
         prefix, model_name, _ = process_report_name(report_name)
         work_dir = os.path.join(root, prefix)
         meta = get_vuln_scan_meta(work_dir, model_name, dataset_name)
-        pid, jid = meta.get('project_id'), meta.get('job_id')
-        if not pid or not jid:
-            return jsonify({'error': '该报告无 project_id/job_id（老报告，需重跑评测）'}), 400
-        base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
-
-        async def _fetch():
-            client = TuringClient(base_url=base_url)
-            try:
-                await client.login(vb_config.TURING_USERNAME, vb_config.TURING_PASSWORD)
-                return await client.get_job_sessions(pid, jid)
-            finally:
-                await client.aclose()
-
-        sessions_resp = _run_async(_fetch())
-        sessions = (sessions_resp or {}).get('sessions') or []
+        sessions = _get_sessions_for_report(work_dir, meta)
+        if not sessions:
+            return jsonify({'error': '该报告无 project_id/job_id 且未配置 sessions_file（老报告，需重跑评测）'}), 400
         traj = trace_view.sessions_to_trajectory(
             sessions, task_id, finding_id, vuln_type, detection_id, detection_source_task_id
         )
@@ -853,6 +843,39 @@ def _get_sessions_cached(pid: str, jid: str, base_url: str) -> list:
     return sessions
 
 
+# 离线导入报告（scan_config.sessions_file，无 pid/jid）：sessions 导出文件按 (path, mtime) 缓存
+_SESSIONS_FILE_CACHE: dict[str, tuple[float, list]] = {}
+
+
+def _get_sessions_for_report(work_dir: str, meta: dict) -> list:
+    """取报告对应的 job sessions：离线报告（sessions_file）读本地；在线按 pid/jid 拉图灵。
+
+    sessions_file 优先：离线导出虽带真实 pid/jid，但平台侧连不上其来源图灵，
+    必须用本地文件。导出文件几十 MB，按 mtime 缓存只读一次（TraceCompareTab
+    同 report 多 gt 共享）。两者都没有 → 空列表（调用方按 unavailable 处理）。
+    """
+    sf = _read_scan_config(work_dir).get('sessions_file') or ''
+    if sf and os.path.isfile(sf):
+        import time
+        mtime = os.path.getmtime(sf)
+        hit = _SESSIONS_FILE_CACHE.get(sf)
+        if hit and hit[0] == mtime:
+            return hit[1]
+        try:
+            with open(sf, encoding='utf-8') as f:
+                sessions = (json.load(f) or {}).get('sessions') or []
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f'read sessions_file failed ({sf}): {e}')
+            return []
+        _SESSIONS_FILE_CACHE[sf] = (mtime, sessions)
+        return sessions
+    pid, jid = meta.get('project_id'), meta.get('job_id')
+    if pid and jid:
+        base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
+        return _get_sessions_cached(pid, jid, base_url)
+    return []
+
+
 @bp_reports.route('/compare/trace', methods=['POST'])
 def compare_trace():
     """跨模型挖掘轨迹对比：同一 gt_id 下各 report 的挖掘轨迹（前端并排对照用）。
@@ -882,18 +905,19 @@ def compare_trace():
             except Exception as e:
                 runs.append({**run, 'status': 'unavailable', 'reason': f'读取报告失败: {e}'})
                 continue
-            pid, jid = meta.get('project_id'), meta.get('job_id')
             vm = meta.get('vuln_match') or {}
             vtype = vm.get('type') or {}
             matches = vtype.get('matches') or []
             missed = vtype.get('missed_gt') or []
             hit = next((m for m in matches if m.get('gt_id') == gt_id), None)
-            if not pid or not jid:
-                runs.append({**run, 'status': 'unavailable', 'reason': '该报告无 project_id/job_id（老报告，需重跑评测）'})
+            sessions = _get_sessions_for_report(work_dir, meta)
+            if not sessions:
+                runs.append({
+                    **run, 'status': 'unavailable',
+                    'reason': '该报告无 project_id/job_id 且未配置 sessions_file（老报告，需重跑评测）'
+                })
             elif hit:
                 finding_id = hit.get('finding_id')
-                base_url = _read_scan_config(work_dir).get('turing_base_url') or vb_config.TURING_BASE_URL
-                sessions = _get_sessions_cached(pid, jid, base_url)
                 info = trace_view.extract_finding_task_map(sessions).get(finding_id) or {}
                 gt_list = vm.get('gt') or []
                 gt_vuln_type = next((g.get('vuln_type') for g in gt_list if g.get('gt_id') == gt_id), None) \
