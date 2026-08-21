@@ -38,7 +38,7 @@ const ENDPOINT_CASES: Array<{ name: string; schema: ZodType; valid: unknown }> =
       total: 0,
       page: 1,
       page_size: 20,
-      filters: { available_models: [], available_datasets: [] },
+      filters: { available_projects: [], available_datasets: [] },
     },
   },
   {
